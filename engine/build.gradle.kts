@@ -49,8 +49,13 @@ tasks.withType<JavaCompile> {
 
 tasks.test {
     useJUnitPlatform {
-        // Integration tests start real Cassandra containers; run them with -Pintegration.
-        if (!project.hasProperty("integration")) excludeTags("integration")
+        // Integration tests start real Cassandra containers: -Pintegration.
+        // Keychain tests need a real OS keychain (Windows, macOS): -Pkeychain.
+        when {
+            project.hasProperty("keychain") -> includeTags("keychain")
+            project.hasProperty("integration") -> excludeTags("keychain")
+            else -> excludeTags("integration", "keychain")
+        }
     }
     systemProperty("cassandra.versions", project.findProperty("cassandraVersions") ?: "4.1")
     maxHeapSize = "1g"

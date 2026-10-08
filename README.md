@@ -82,6 +82,16 @@ JAVA_HOME=/path/to/jdk-21 scripts/package.sh --linux AppImage deb   # or --win n
 Output goes to `desktop/dist/`. CI builds all platforms: push a tag such as `v0.1.0`
 and the Release workflow publishes the installers.
 
+## Test clusters
+
+`test-env/` starts the clusters the tests use: a 2-DC Cassandra 4.1 cluster (127.0.0.1:19042),
+Cassandra 3.11 (29042) and, with `--profile secure`, Cassandra 5.0 with TLS and login (39042,
+user `cassandra` / `cassandra`, truststore `test-env/certs/node.pem`).
+
+```bash
+cd test-env && ./make-certs.sh && docker compose --profile secure up -d --wait
+```
+
 ## Tests
 
 ```bash
@@ -98,5 +108,7 @@ engine/    Java 21 engine: HTTP API, CQL driver, schema, guard, audit (Gradle)
 ui/        React + TypeScript UI (Vite), served by the engine
 desktop/   Electron shell that starts the bundled engine
 scripts/   packaging
-.github/   CI and release workflows
+test-env/  docker-compose test clusters (multi-DC, 3.11, TLS + login)
+docs/      status, design decisions (adr/), threat model
+.github/   CI, CodeQL and release workflows
 ```

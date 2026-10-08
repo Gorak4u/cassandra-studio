@@ -76,3 +76,83 @@ jobs:
       - name: Audit production dependencies
         working-directory: ui
         run: npm audit --omit=dev --audit-level=high
+
+  keychain:
+    name: OS keychain (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21", cache: gradle }
+      - name: Secrets round-trip through the real keychain
+        working-directory: engine
+        shell: bash
+        run: ./gradlew --no-daemon test -Pkeychain
+
+  e2e:
+    name: Browser test on real clusters
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21", cache: gradle }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: ui/package-lock.json }
+      - name: Start 2-DC Cassandra 4.1 cluster and Cassandra 3.11 (test-env)
+        run: docker compose -f test-env/docker-compose.yml up -d --wait --wait-timeout 600
+      - name: Build engine and UI
+        run: |
+          (cd engine && ./gradlew --no-daemon -q shadowJar)
+          (cd ui && npm ci --no-audit --no-fund && npm run build && npx playwright install --with-deps chromium)
+      - name: Start engine
+        run: |
+          java -jar engine/build/libs/cassandra-studio-engine-all.jar --port 18080 --token e2e --data-dir "$RUNNER_TEMP/studio" \
+            --ui-dir ui/dist --no-keyring > "$RUNNER_TEMP/engine.log" 2>&1 &
+          for _ in $(seq 1 60); do grep -q STUDIO_ENGINE_READY "$RUNNER_TEMP/engine.log" && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/engine.log"; exit 1
+      - name: Drive the UI
+        working-directory: ui
+        run: node tests/smoke.mjs http://127.0.0.1:18080 e2e "$RUNNER_TEMP/screens"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: ${{ runner.temp }}/screens
+          retention-days: 14
+      - name: Engine and cluster logs
+        if: failure()
+        run: |
+          cat "$RUNNER_TEMP/engine.log" || true
+          docker compose -f test-env/docker-compose.yml ps
+          docker compose -f test-env/docker-compose.yml logs --tail 50
+
+  dependency-scan:
+    name: Dependency vulnerabilities (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21", cache: gradle }
+      - name: Build engine jar
+        working-directory: engine
+        run: ./gradlew --no-daemon -q shadowJar
+      - name: Scan npm lockfiles
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Scan engine jar (Java dependencies)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: rootfs
+          scan-ref: engine/build/libs
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"

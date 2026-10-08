@@ -1,8 +1,9 @@
 // End-to-end smoke test: drives the real UI (served by a running engine) against real
 // Cassandra clusters and saves screenshots.
 // Usage: node tests/smoke.mjs <engineUrl> <token> <screenshotDir>
-// Expects: a multi-DC cluster on 127.0.0.1:19042 (dc_east + dc_west) and Cassandra 3.11 on 127.0.0.1:29042.
-import { chromium } from "playwright";
+// Expects a multi-DC cluster (dc_east + dc_west) at MULTI_DC (default 127.0.0.1:19042)
+// and Cassandra 3.11 at LEGACY (default 127.0.0.1:29042). test-env/ starts both.
+import { chromium } from "@playwright/test";
 import fs from "node:fs";
 
 const [url, token, outDir] = process.argv.slice(2);
@@ -24,10 +25,10 @@ const acme = await api("POST", "/api/folders", { name: "acme" });
 const prod = await api("POST", "/api/folders", { name: "prod", parentId: acme.id });
 const nonprod = await api("POST", "/api/folders", { name: "nonprod", parentId: acme.id });
 await api("POST", "/api/connections", { connection: {
-  name: "acme-core-prod", folderId: prod.id, environment: "PROD", contactPoints: ["127.0.0.1:19042"],
+  name: "acme-core-prod", folderId: prod.id, environment: "PROD", contactPoints: [process.env.MULTI_DC ?? "127.0.0.1:19042"],
   localDatacenter: "dc_east", defaultConsistency: "LOCAL_QUORUM", tags: ["core", "multi-dc"] } });
 await api("POST", "/api/connections", { connection: {
-  name: "legacy-311", folderId: nonprod.id, environment: "DEV", contactPoints: ["127.0.0.1:29042"], tags: ["3.11"] } });
+  name: "legacy-311", folderId: nonprod.id, environment: "DEV", contactPoints: [process.env.LEGACY ?? "127.0.0.1:29042"], tags: ["3.11"] } });
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1500, height: 920 } });
@@ -106,5 +107,9 @@ await page.getByText("3.11").first().waitFor();
 step("3.11 overview");
 await shot("07-legacy-311");
 
-console.log(errors.length ? "PAGE ERRORS:\n" + errors.join("\n") : "no page errors");
 await browser.close();
+if (errors.length) {
+  console.error("PAGE ERRORS:\n" + errors.join("\n"));
+  process.exit(1);
+}
+console.log("no page errors");

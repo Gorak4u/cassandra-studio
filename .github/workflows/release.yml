@@ -89,6 +89,8 @@ jobs:
             args="$args -c.mac.identity=-"
           fi
           scripts/package.sh $args
+      - name: Smoke-test the packaged engine (bundled Java, jar and UI)
+        run: scripts/smoke-packaged.sh
       - name: Checksums
         working-directory: desktop/dist
         run: |

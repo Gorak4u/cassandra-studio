@@ -1,0 +1,63 @@
+# Local test clusters matching the estate's mix (see README):
+#   acme-core   Cassandra 4.1 (Java 11): dc_east x2 + dc_west x1      -> 127.0.0.1:19042
+#   legacy-311  Cassandra 3.11 (Java 8), single node                  -> 127.0.0.1:29042
+#   secure-50   Cassandra 5.0 (Java 17), client TLS + password auth   -> 127.0.0.1:39042 (profile "secure")
+# Start:  ./make-certs.sh && docker compose --profile secure up -d   (or without the profile)
+# Nodes join one at a time; `docker compose ps` shows them healthy when ready (2-4 min).
+
+x-cassandra: &cassandra
+  environment: &env
+    MAX_HEAP_SIZE: 512M
+    HEAP_NEWSIZE: 100M
+    CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
+  healthcheck:
+    test: ["CMD-SHELL", "nodetool statusbinary | grep -q running"]
+    interval: 10s
+    timeout: 10s
+    retries: 40
+    start_period: 30s
+
+services:
+  east1:
+    <<: *cassandra
+    image: cassandra:4.1
+    hostname: east1
+    environment: { <<: *env, CASSANDRA_CLUSTER_NAME: acme-core, CASSANDRA_SEEDS: east1, CASSANDRA_NUM_TOKENS: "16", CASSANDRA_DC: dc_east, CASSANDRA_RACK: rack1 }
+    ports: ["19042:9042"]
+  east2:
+    <<: *cassandra
+    image: cassandra:4.1
+    hostname: east2
+    environment: { <<: *env, CASSANDRA_CLUSTER_NAME: acme-core, CASSANDRA_SEEDS: east1, CASSANDRA_NUM_TOKENS: "16", CASSANDRA_DC: dc_east, CASSANDRA_RACK: rack2 }
+    depends_on: { east1: { condition: service_healthy } }
+  west1:
+    <<: *cassandra
+    image: cassandra:4.1
+    hostname: west1
+    environment: { <<: *env, CASSANDRA_CLUSTER_NAME: acme-core, CASSANDRA_SEEDS: east1, CASSANDRA_NUM_TOKENS: "16", CASSANDRA_DC: dc_west, CASSANDRA_RACK: rack1 }
+    depends_on: { east2: { condition: service_healthy } }
+
+  legacy311:
+    <<: *cassandra
+    image: cassandra:3.11
+    hostname: legacy311
+    environment: { <<: *env, CASSANDRA_CLUSTER_NAME: legacy-311, CASSANDRA_DC: dc1 }
+    ports: ["29042:9042"]
+
+  secure50:
+    <<: *cassandra
+    image: cassandra:5.0
+    hostname: secure50
+    profiles: [secure]
+    environment: { <<: *env, CASSANDRA_CLUSTER_NAME: secure-50, CASSANDRA_DC: dc1 }
+    ports: ["39042:9042"]
+    volumes: ["./certs/node.jks:/certs/node.jks:ro"]
+    # Same edits as SecureClusterIntegrationTest: PasswordAuthenticator, CassandraAuthorizer, client TLS.
+    entrypoint:
+      - bash
+      - -c
+      - >-
+        CONF=/etc/cassandra/cassandra.yaml &&
+        sed -i 's/AllowAllAuthenticator/PasswordAuthenticator/; s/AllowAllAuthorizer/CassandraAuthorizer/' $$CONF &&
+        sed -i '/^client_encryption_options:/,/^[a-z]/ { s/^\(\s*\)enabled: false/\1enabled: true/; s#^\(\s*\)keystore: .*#\1keystore: /certs/node.jks#; s/^\(\s*\)keystore_password: .*/\1keystore_password: changeit/ }' $$CONF &&
+        exec docker-entrypoint.sh cassandra -f

@@ -6,7 +6,7 @@ Updated: 2026-10-08. Requirement IDs refer to [`requirement.txt`](../requirement
 
 | Phase | Status | Notes |
 |---|---|---|
-| 0 Foundations | 🟡 in progress | Builds, packaging, CI and release workflows done; code signing waits on certificates |
+| 0 Foundations | 🟢 done except signing | Builds, packaging, CI, security scans, release pipeline, test-env, ADRs, threat model; signing waits on certificates; job runner moves to Phase 3 |
 | 1 Connections, CQL, schema | 🟢 mostly done | See below |
 | 2 JMX monitoring | ⚪ next | Health, ring, GC, load, reads/writes, alerts |
 | 3 Ops, GC logs, diagnostics, backup, bulk → v1.0 | ⚪ | |
@@ -30,9 +30,12 @@ Updated: 2026-10-08. Requirement IDs refer to [`requirement.txt`](../requirement
 |---|---|
 | Engine unit tests | 67 passing |
 | UI unit tests | 9 passing |
-| Integration tests on real Cassandra 3.11 / 4.1 / 5.0 | 6 per version, passing |
-| Browser test, 3-node 2-DC cluster (4.1) + 3.11 node | Passing: overview, PROD confirm, query pinned to remote-DC node, schema, audit |
-| Windows / macOS installers | Built by CI; not yet tried on real machines |
+| Integration tests on real Cassandra 3.11 / 4.1 / 5.0 | Plain CQL: 6 per version. TLS + PasswordAuthenticator + CassandraAuthorizer: 2 per version |
+| OS keychain | CI on Windows and macOS runners |
+| Packaged app | CI starts the bundled engine from each OS's installer build |
+| Security | CodeQL (Java, TypeScript), Trivy (npm and Java dependencies), npm audit, SBOM |
+| Browser test, 3-node 2-DC cluster (4.1) + 3.11 node | Passing locally and in CI: overview, PROD confirm, query pinned to remote-DC node, schema, audit |
+| Installers | v0.1.0-alpha.1 published for Windows, macOS (arm64, x64), Linux; not yet opened on a real Windows PC or Mac |
 
 ## Waiting on the owner
 
