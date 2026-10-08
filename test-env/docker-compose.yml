@@ -10,6 +10,11 @@ x-cassandra: &cassandra
     MAX_HEAP_SIZE: 512M
     HEAP_NEWSIZE: 100M
     CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
+    # Test-only speed-ups for EMPTY nodes (never use on real clusters): no gossip-settle wait, short ring
+    # delay, and allow several nodes to bootstrap at once. Cuts cluster start from ~4 min to ~1.5 min.
+    JVM_EXTRA_OPTS: >-
+      -Dcassandra.skip_wait_for_gossip_to_settle=0 -Dcassandra.ring_delay_ms=1000
+      -Dcassandra.consistent.rangemovement=false
   healthcheck:
     # Exact match: nodetool's own error text ("...Is it running?") must not count as healthy.
     test: ["CMD-SHELL", "nodetool statusbinary 2>/dev/null | grep -qx running"]
@@ -36,7 +41,7 @@ services:
     image: cassandra:4.1
     hostname: west1
     environment: { <<: *env, CASSANDRA_CLUSTER_NAME: acme-core, CASSANDRA_SEEDS: east1, CASSANDRA_NUM_TOKENS: "16", CASSANDRA_DC: dc_west, CASSANDRA_RACK: rack1 }
-    depends_on: { east2: { condition: service_healthy } }
+    depends_on: { east1: { condition: service_healthy } }
 
   legacy311:
     <<: *cassandra

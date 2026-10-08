@@ -102,14 +102,17 @@ jobs:
         with: { distribution: temurin, java-version: "21", cache: gradle }
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: npm, cache-dependency-path: ui/package-lock.json }
+      # Clusters boot in the background while the engine and UI build.
       - name: Start test-env (2-DC 4.1 cluster, 3.11, and 5.0 with TLS + login)
         run: |
           test-env/make-certs.sh
-          docker compose -f test-env/docker-compose.yml --profile secure up -d --wait --wait-timeout 600
+          docker compose -f test-env/docker-compose.yml --profile secure up -d
       - name: Build engine and UI
         run: |
           (cd engine && ./gradlew --no-daemon -q shadowJar)
           (cd ui && npm ci --no-audit --no-fund && npm run build && npx playwright install --with-deps chromium)
+      - name: Wait for every node to be up
+        run: docker compose -f test-env/docker-compose.yml --profile secure up -d --wait --wait-timeout 600
       - name: Start engine
         run: |
           java -jar engine/build/libs/cassandra-studio-engine-all.jar --port 18080 --token e2e --data-dir "$RUNNER_TEMP/studio" \
@@ -119,15 +122,6 @@ jobs:
       - name: Drive the UI
         working-directory: ui
         run: node tests/smoke.mjs http://127.0.0.1:18080 e2e "$RUNNER_TEMP/screens"
-      - name: Desktop window (Electron under Xvfb), startup time and clean exit
-        run: |
-          sudo apt-get install -y xvfb >/dev/null
-          # Ubuntu 24.04 blocks unprivileged user namespaces via AppArmor; Chromium's sandbox needs them.
-          # Lift it on the runner rather than running Electron with --no-sandbox.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          RESOURCES_ONLY=1 scripts/package.sh >/dev/null
-          (cd desktop && npm ci --no-audit --no-fund)
-          cd ui && xvfb-run -a -s "-screen 0 1500x950x24" node tests/desktop-window.mjs ../desktop "$RUNNER_TEMP/screens/desktop-window.png" 15000
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -140,6 +134,34 @@ jobs:
           cat "$RUNNER_TEMP/engine.log" || true
           docker compose -f test-env/docker-compose.yml --profile secure ps
           docker compose -f test-env/docker-compose.yml --profile secure logs --tail 50
+
+  desktop:
+    name: Desktop window (Electron)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21", cache: gradle }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: "ui/package-lock.json" }
+      - name: Build app resources (engine, Java runtime, UI) and Electron
+        run: |
+          sudo apt-get install -y xvfb >/dev/null
+          RESOURCES_ONLY=1 scripts/package.sh >/dev/null
+          (cd desktop && npm ci --no-audit --no-fund)
+      - name: Launch under Xvfb, check UI, startup time and clean exit
+        run: |
+          # Ubuntu 24.04 blocks unprivileged user namespaces via AppArmor; Chromium's sandbox needs them.
+          # Lift it on the runner rather than running Electron with --no-sandbox.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          mkdir -p "$RUNNER_TEMP/screens"
+          cd ui && xvfb-run -a -s "-screen 0 1500x950x24" node tests/desktop-window.mjs ../desktop "$RUNNER_TEMP/screens/desktop-window.png" 15000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-window
+          path: ${{ runner.temp }}/screens
+          retention-days: 14
 
   dependency-scan:
     name: Dependency vulnerabilities (Trivy)
