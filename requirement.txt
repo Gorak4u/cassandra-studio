@@ -1,19 +1,31 @@
 ================================================================================
  CASSANDRA STUDIO - REQUIREMENTS SPECIFICATION
- Version 1.0 (draft)                                         Date: 2026-10-08
+ Version 1.1 (draft)                                         Date: 2026-10-08
 ================================================================================
 
 Working name : Cassandra Studio
-Product type : Cross-platform desktop application (GUI)
-Purpose      : One tool to connect to, monitor, query and operate any number
-               of Apache Cassandra clusters, regardless of the Cassandra or
-               Java version each one runs.
+Product type : Cross-platform desktop application (GUI), plus an optional
+               headless "Studio Server" for work that must keep running when
+               no desktop app is open (schedules, alerts, history, team use).
+Purpose      : One tool to connect to, monitor, query, operate, back up,
+               repair, diagnose and benchmark any number of Apache Cassandra
+               clusters, regardless of the Cassandra or Java version each one
+               runs. It replaces day-to-day use of the separate tools listed
+               in section 1.1.
 
 Requirement IDs use these prefixes:
   CON  connection management          MON  monitoring and graphs (JMX)
   CQL  query editor and data tools    SCH  schema / object browser
   OPS  cluster operations (nodetool)  SEC  users, roles, security
-  ALR  warnings, errors, alerts       NFR  non-functional
+  ALR  warnings, errors, alerts       SRV  Studio Server (team / always-on)
+  REP  repair management (Reaper)     BAK  backup and restore (Medusa)
+  GCL  GC log analysis (GCViewer)     JVM  JVM diagnostics (profilers)
+  BLK  bulk load / unload (DSBulk)    STR  stress / benchmark
+  SST  SSTable inspection             PRF  query & data-model diagnostics
+  AUD  Cassandra audit / query log    CFG  config drift and upgrades
+  MIG  schema migrations              PRV  provisioning integration
+  RUN  estate script runner           CAP  capacity planning
+  NFR  non-functional
 Priority: [M] must have (MVP)   [S] should have (v1.x)   [C] could have (later)
 
 
@@ -38,6 +50,44 @@ Facts about the current nodes that shape this design:
   - Operators reach nodes over SSH.
 The tool must therefore support more than one way of reading JMX (see CON-6).
 
+1.1 TOOLS THIS PRODUCT COVERS
+The table maps each popular Cassandra tool to the requirement group that
+covers its job. "Integrate" means the tool is driven or read by Studio if it
+is already installed; "built-in" means Studio does the job itself.
+
+  Tool / practice                     Job                          Covered by
+  ----------------------------------  ---------------------------  ------------
+  DataStax DevCenter, DBeaver,        CQL editor, schema browser,  CQL, SCH
+    DataStax Studio, TablePlus          data editing, export
+  cqlsh (incl. COPY, DESCRIBE)        queries, small import/export CQL, BLK
+  nodetool                            node operations and stats    OPS, MON
+  Grafana + jmx_exporter / MCAC       metric dashboards, history   MON, SRV
+  DataStax OpsCenter, AxonOps         all-in-one ops console       all groups
+  Cassandra Reaper                    scheduled segmented repair   REP (built-in
+                                                                     + integrate)
+  Cassandra Medusa, estate S3 backup  backup, restore, verify      BAK (integrate)
+    scripts (full/incremental/restore)
+  GCViewer, GCeasy, GCPlot            GC log analysis              GCL
+  VisualVM, JConsole, JMC/JFR,        JVM threads, heap, profiling JVM
+    sjk ttop, async-profiler
+  DSBulk                              bulk load / unload / count   BLK
+  cassandra-stress, NoSQLBench,       load and capacity testing    STR
+    easy-cass-stress
+  sstablemetadata, sstabledump,       SSTable inspection           SST
+    sstableutil, sstableexpiredblockers
+  nodetool toppartitions/profileload, hot partitions, tombstones,  PRF
+    tablehistograms, tracing          slow queries, data model
+  Cassandra audit log + fqltool       audit, query capture/replay  AUD
+    (4.0+)
+  Config diff / upgrade pre-check     drift, upgrade readiness     CFG
+  cassandra-migration, cqlmigrate     versioned schema changes     MIG
+  Puppet control repo, Rundeck,       provisioning, node lifecycle PRV
+    K8ssandra / cass-operator
+  Estate scripts (tombstone-scan,     ad-hoc ops scripts on nodes  RUN
+    compaction-analyzer, ...)
+  Capacity planning spreadsheets      growth and sizing forecasts  CAP
+  Apache Cassandra Sidecar            HTTP management API          CON-6 (e)
+
 
 --------------------------------------------------------------------------------
 2. SCOPE
@@ -46,18 +96,29 @@ IN SCOPE
   - Apache Cassandra 3.11, 4.0, 4.1, 5.0 (and later versions as released).
   - Connection management, monitoring, CQL editor, schema browser, data
     editing, import/export, nodetool-style operations, user/role management.
+  - Repair scheduling, backup/restore, GC log analysis, JVM diagnostics,
+    bulk load/unload, stress testing, SSTable inspection, query and data-
+    model diagnostics, audit/query logs, config drift, schema migrations,
+    capacity planning, estate script runner (sections 4.9 - 4.22).
+  - Provisioning and node lifecycle THROUGH the existing tooling (Puppet
+    control repo, Rundeck): Studio triggers and tracks, it does not
+    re-implement them (PRV).
+  - Optional Studio Server for always-on and team features (SRV).
   - Installers for Windows, macOS (Intel + Apple Silicon), Linux (Ubuntu/
-    Debian .deb, RHEL/Rocky .rpm, generic AppImage).
+    Debian .deb, RHEL/Rocky .rpm, generic AppImage); Studio Server as a
+    container image and Linux package.
 
-OUT OF SCOPE (v1)
+OUT OF SCOPE
   - Non-Cassandra databases (MySQL, Postgres, ...). "All features of DBeaver"
     means the DBeaver feature set APPLIED TO CASSANDRA, not multi-database.
   - Relational-only features (ER diagrams with foreign keys, joins, SQL
     query builder) - Cassandra has no such concepts.
-  - Installing, provisioning or upgrading Cassandra itself (that is Puppet's
-    job in cassandra-control-repo).
+  - Creating machines or writing Puppet code; Studio calls the existing
+    provisioning flow instead (PRV).
   - DataStax Enterprise-only features (Search, Graph, Analytics).
-  - Long-term metrics storage replacing Prometheus/Grafana.
+  - Replacing Prometheus/Grafana as the estate's long-term metrics store;
+    Studio can READ from Prometheus (MON-23) and keeps its own history only
+    for its dashboards (SRV-4).
 
 
 --------------------------------------------------------------------------------
@@ -66,6 +127,8 @@ OUT OF SCOPE (v1)
   DBA / SRE        : monitors health, runs repairs/compactions, manages users.
   Developer        : browses schema, runs queries, edits test data.
   Read-only viewer : looks at dashboards and data, cannot change anything.
+  Platform admin   : runs Studio Server, manages team access (SSO/RBAC),
+                     shared connections and schedules.
 
 
 --------------------------------------------------------------------------------
@@ -99,6 +162,10 @@ CON-6 [M] JMX access method, selectable per connection (node-level overrides
             c) jmx_exporter HTTP    read http://node:7071/metrics
                                     (read-only metrics, no operations)
             d) None                 CQL-only connection
+            e) Cassandra Sidecar    Apache Cassandra Sidecar HTTP API,
+                                    where deployed (4.0+); used for
+                                    operations, SSTable upload and health
+                                    without SSH
 CON-7 [M] SSH settings for (b): user, port, key file / ssh-agent / password,
           optional jump host (bastion), known_hosts checking.
 CON-8 [M] Secrets (passwords, key passphrases) are stored in the OS keychain
@@ -167,6 +234,13 @@ MON-20 [S] COMPACTION and STREAMING progress (live, like `nodetool
 MON-21 [S] Top tables: "hottest" tables by reads, writes, latency, size.
 MON-22 [C] Client connections view (connected clients, driver, version) -
            Cassandra 4.0+ (system_views.clients).
+MON-23 [S] Prometheus as a data source: read history for any graph from the
+           estate's existing Prometheus (jmx_exporter / node_exporter
+           series) instead of, or in addition to, Studio's own history.
+MON-24 [S] OS-level panels per node (CPU, load average, memory, disk IOPS
+           and latency, network) from node_exporter or over SSH.
+MON-25 [S] Virtual tables browser (4.0+): system_views.* shown as live
+           tables (settings, caches, thread_pools, sstable_tasks, ...).
 
 4.3 CQL EDITOR AND DATA TOOLS (CQL)  - DBeaver / DevCenter parity
 -----------------------------------------------------------------
@@ -276,7 +350,277 @@ ALR-3 [S] Node log viewer: tail and search system.log / debug.log of a node
           over SSH; filter by level WARN/ERROR; highlight known patterns
           (GC pauses, dropped mutations, OOM, compaction errors).
 ALR-4 [S] Desktop notifications when a rule turns RED (opt-in per cluster).
-ALR-5 [C] Send alerts to Slack / e-mail / webhook.
+ALR-5 [S] Send alerts to Slack / e-mail / PagerDuty / webhook (needs SRV,
+          so alerts fire when no desktop app is open).
+
+4.8 STUDIO SERVER - TEAM AND ALWAYS-ON MODE (SRV)
+-------------------------------------------------
+The desktop app works on its own. Features that must run unattended or be
+shared by a team need the optional Studio Server: the same engine, headless,
+deployed as a container or Linux service close to the clusters.
+SRV-1 [S] Desktop app connects to a Studio Server and then uses it for
+          cluster access (no SSH/JMX from laptops needed), or works
+          standalone as before. The mode is per workspace.
+SRV-2 [S] Single sign-on (OIDC / SAML, LDAP / Active Directory) and role-
+          based access: viewer / developer / operator / admin, granted per
+          folder or per cluster (answers Q-1).
+SRV-3 [S] Shared, central connection catalogue and saved queries/dashboards,
+          with per-user private items (answers Q-2). Secrets held in the
+          server's vault (HashiCorp Vault, AWS/GCP secret manager or an
+          encrypted local store).
+SRV-4 [S] Metric history kept on the server (default 30 days, downsampled
+          after 48 h), so graphs survive app restarts and cover all users.
+SRV-5 [S] Scheduler for repairs (REP), backups (BAK), health reports and
+          custom jobs; alert routing (ALR-5) with silences and escalation.
+SRV-6 [S] Central, tamper-evident audit log of every action by every user;
+          export to SIEM (syslog / JSON).
+SRV-7 [S] High availability: two or more server instances with a shared
+          store (PostgreSQL); a lost instance never loses schedules.
+SRV-8 [C] REST API and CLI for everything the UI does (automation, CI).
+SRV-9 [C] Web UI served by the server (same UI code) for users who cannot
+          install the desktop app.
+
+4.9 REPAIR MANAGEMENT - Reaper equivalent (REP)
+-----------------------------------------------
+REP-1 [M] Repair runs split into token-range segments, run with limited
+          parallelism and intensity, retry failed segments, pause/resume/
+          abort, live per-segment progress.
+REP-2 [M] Full, incremental (4.0+) and sub-range repair; per keyspace,
+          table list, DC list, or "primary range only".
+REP-3 [S] Repair schedules (e.g. every 7 days, must finish within
+          gc_grace_seconds) - run by Studio Server (SRV-5).
+REP-4 [S] Repair history and coverage: last successful repair per table and
+          per range; alert when a table has not been fully repaired within
+          gc_grace_seconds (risk of zombie data).
+REP-5 [S] Safety: no repair start when a node is down, when pending
+          compactions or streaming are above a threshold, or during a
+          configured blackout window.
+REP-6 [S] Integrate with an existing Cassandra Reaper (REST API): show and
+          control its runs and schedules instead of running repairs twice.
+          Also detect the estate's systemd repair timers and show them.
+
+4.10 BACKUP AND RESTORE - Medusa / estate scripts (BAK)
+-------------------------------------------------------
+BAK-1 [M] Backup providers, chosen per cluster:
+            a) estate scripts already on the nodes (full-backup-to-s3,
+               incremental-backup-to-s3, restore-from-s3, verify-backup,
+               backup-status) - S3, GCS, Azure, local
+            b) Cassandra Medusa (CLI over SSH, or its gRPC service)
+            c) snapshots only (nodetool snapshot)
+BAK-2 [M] Backup catalogue: list backups per cluster/node with time, type
+          (full/incremental), size, schema version, status, storage
+          location, retention and object-lock state.
+BAK-3 [M] Run a backup now (cluster, DC or node), with progress and result.
+BAK-4 [S] Verify a backup (files present, checksums match) and show a
+          "last verified restorable" date per cluster.
+BAK-5 [S] Guided restore: whole cluster, one node, one keyspace or one
+          table; to the same or to a different cluster; point-in-time when
+          commitlog archiving is configured. Dry-run plan shown first; PROD
+          restore needs two confirmations.
+BAK-6 [S] Backup schedules and retention policies (SRV-5); alert when the
+          last good backup is older than the policy allows.
+BAK-7 [C] Restore drill report: periodic automatic restore to a scratch
+          cluster to prove backups work.
+
+4.11 GC LOG ANALYSIS - GCViewer / GCeasy equivalent (GCL)
+---------------------------------------------------------
+Live GC metrics from JMX are in MON-16. This group analyses GC LOG FILES,
+which hold every single pause and are needed to tune a JVM.
+GCL-1 [M] Load GC logs from a node over SSH (current and rotated files) or
+          from a local file / zip. Parse both formats:
+            - Java 8 (-XX:+PrintGCDetails / PrintGCDateStamps)
+            - Java 9+ unified logging (-Xlog:gc*)
+          for CMS, ParNew, G1, ZGC and Shenandoah.
+GCL-2 [M] Charts: pause time per event over time, heap before/after GC,
+          young/old/metaspace occupancy, allocation and promotion rate,
+          GC throughput %, concurrent cycle durations.
+GCL-3 [M] Summary: total/avg/max/p99 pause, pause histogram, % time in GC,
+          number of Full GCs and their causes, humongous allocations (G1),
+          to-space exhausted / evacuation failures, safepoint time.
+GCL-4 [S] Findings and tuning hints: e.g. "Full GC caused by metaspace",
+          "heap too small - old gen > 90 % after GC", "pauses > 500 ms
+          exceed read timeout", with the JVM option involved
+          (jvm-server.options / jvm11-server.options).
+GCL-5 [S] Compare two logs (before/after tuning, node A vs node B) on one
+          chart.
+GCL-6 [S] Correlate GC pauses with read/write latency spikes (MON-17) on a
+          shared time axis.
+GCL-7 [C] Show current GC flags of a running node (via DiagnosticCommand
+          VM.flags) next to the recommendation.
+
+4.12 JVM DIAGNOSTICS - VisualVM / JMC / sjk equivalent (JVM)
+------------------------------------------------------------
+All of these work over the existing JMX connection (DiagnosticCommand and
+Threading MBeans), so no extra agent is needed on the node.
+JVM-1 [M] Thread dump: take one or a series, group by state and by stack,
+          highlight blocked/deadlocked threads, compare dumps, export .txt.
+JVM-2 [M] Top threads by CPU (like sjk ttop), refreshed live.
+JVM-3 [S] Heap histogram (class, instances, bytes) and diff between two
+          histograms (leak hunting). Full heap dump to the node's disk with
+          a size warning; optional download.
+JVM-4 [S] JDK Flight Recorder: start/stop a recording (Java 11+, 8u262+),
+          download the .jfr and show CPU, allocation, lock and I/O hot
+          spots.
+JVM-5 [S] JVM summary: version, vendor, flags, system properties, uptime,
+          class loading, compilation, direct/mapped buffer pools, open file
+          descriptors.
+JVM-6 [C] CPU / allocation flame graph via async-profiler, copied to the
+          node over SSH for one run and removed after (opt-in, expert mode).
+
+4.13 BULK LOAD AND UNLOAD - DSBulk equivalent (BLK)
+---------------------------------------------------
+BLK-1 [M] Unload a table or a query to CSV / JSON (local file or S3/GCS),
+          token-range parallel, with progress, rate and error file.
+BLK-2 [M] Load CSV / JSON into a table with column mapping, data-type
+          conversion, TTL/timestamp options, batch size, rate limit,
+          max-errors and a rejected-rows file.
+BLK-3 [S] Fast exact row count per table / per token range / per host.
+BLK-4 [S] Copy data from one table or cluster to another (unload + load
+          without a local file), with throttling.
+BLK-5 [S] Jobs run on the user's machine or on Studio Server (large data
+          should not cross the user's laptop link).
+BLK-6 [C] sstableloader / Sidecar upload for very large imports.
+
+4.14 STRESS AND BENCHMARK TESTING (STR)
+---------------------------------------
+STR-1 [S] Run cassandra-stress (shipped with Cassandra) or NoSQLBench
+          workloads from a wizard: write / read / mixed, user profile YAML
+          (the estate's stress-schema.yaml as a starting point), threads,
+          rate, duration, consistency.
+STR-2 [S] Run from the user's machine, from Studio Server, or on chosen
+          stress client hosts over SSH.
+STR-3 [S] Live results (ops/s, latency percentiles, errors) next to the
+          cluster's own metrics (MON) on one time axis; save runs and
+          compare runs.
+STR-4 [S] Blocked on PROD connections unless an admin unlocks it per run;
+          clear warning on any shared cluster.
+STR-5 [C] Workload generator from an existing table's schema and sampled
+          data distribution.
+
+4.15 SSTABLE INSPECTION (SST)
+-----------------------------
+Runs the tools that ship with Cassandra on the node over SSH (or via the
+Sidecar), using the node's own Cassandra version.
+SST-1 [S] List SSTables per table and node: size, level / bucket, min/max
+          timestamp, repaired-at / pending-repair, droppable tombstone
+          ratio, estimated partitions, compression ratio (sstablemetadata).
+SST-2 [S] SSTable timeline chart (TWCS/LCS/STCS layout) to see why data is
+          not being compacted or expired.
+SST-3 [S] sstableexpiredblockers: which SSTables block expired data from
+          being dropped.
+SST-4 [C] Dump one partition from an SSTable as JSON (sstabledump) - read
+          only, size-limited.
+SST-5 [C] sstableutil / sstablescrub / sstablesplit / sstablelevelreset /
+          sstablerepairedset with the node stopped, as expert-mode wizards
+          with pre-checks.
+
+4.16 QUERY AND DATA-MODEL DIAGNOSTICS (PRF)
+-------------------------------------------
+PRF-1 [M] Hot partitions: run nodetool toppartitions / profileload (where
+          the version supports it) per table for a chosen period; show top
+          keys by reads/writes and largest partitions.
+PRF-2 [M] Large partitions and tombstones: table histograms (partition
+          size, cell count), tombstone warnings from logs, tombstone scan
+          per table (the estate's tombstone-scan as an option).
+PRF-3 [S] Slow-query capture: enable/disable slow query logging threshold,
+          show slow queries from logs with coordinator and duration.
+PRF-4 [S] Query advisor in the editor: show partition key coverage, expected
+          partitions touched, consistency vs RF, and warn on IN on
+          partition key, unbounded range scans, unlogged multi-partition
+          batches.
+PRF-5 [S] Compaction analysis: strategy fit per table (e.g. TWCS on TTL
+          time-series), backlog trend, compaction throughput vs write rate
+          (the estate's compaction-analyzer as an option).
+PRF-6 [C] Data-model review report per keyspace, combining SCH-7, PRF-1,
+          PRF-2 and PRF-5 into one exportable document.
+
+4.17 CASSANDRA AUDIT LOG AND FULL QUERY LOG (AUD) - Cassandra 4.0+
+------------------------------------------------------------------
+AUD-1 [S] Enable/disable/configure the audit log per node or cluster
+          (included/excluded keyspaces, categories, users).
+AUD-2 [S] Search and view audit events (who, what, when, from where, result)
+          collected from all nodes, with filters and export.
+AUD-3 [S] Full query log: enable for a period, then view captured queries,
+          and use fqltool dump / replay / compare to replay them against a
+          test cluster (e.g. before an upgrade).
+AUD-4 [C] Alerts on audit patterns (failed logins, DDL on PROD, superuser
+          use) via ALR-5.
+
+4.18 CONFIG DRIFT AND UPGRADES (CFG)
+------------------------------------
+CFG-1 [M] Effective config per node: cassandra.yaml settings (virtual table
+          system_views.settings on 4.0+, file over SSH otherwise), JVM
+          options and flags, OS limits.
+CFG-2 [M] Drift report: settings that differ between nodes of the same
+          cluster/DC, or differ from the expected values in the Puppet
+          control repo's Hiera data.
+CFG-3 [S] Change runtime settings that Cassandra allows without restart
+          (compaction/stream throughput, trace probability, timeouts on
+          4.0+, log levels), with audit.
+CFG-4 [S] Upgrade readiness check per cluster, e.g. 3.11 -> 4.0 -> 4.1 ->
+          5.0: removed/renamed yaml options, deprecated features in use
+          (Thrift, COMPACT STORAGE, old SSTable formats needing
+          upgradesstables), Java version compatibility, schema agreement,
+          repair status, disk headroom. The estate's
+          cassandra-upgrade-precheck as an option.
+CFG-5 [S] Rolling-upgrade tracker: shows per node which version it runs and
+          the step it is at, while Puppet/Rundeck do the upgrade (PRV).
+
+4.19 SCHEMA MIGRATIONS (MIG)
+----------------------------
+MIG-1 [S] Versioned migration scripts (folder of .cql files, Git
+          repository), applied in order with a history table in the target
+          keyspace (compatible with cassandra-migration conventions).
+MIG-2 [S] Plan / apply / status per cluster; waits for schema agreement
+          after every DDL statement before the next one.
+MIG-3 [S] Promote the same migration set DEV -> STAGING -> PROD and show
+          which clusters are behind.
+MIG-4 [C] Generate a migration from a schema compare (SCH-6).
+
+4.20 PROVISIONING AND NODE LIFECYCLE INTEGRATION (PRV)
+------------------------------------------------------
+Studio does not build machines or write Puppet code. It drives and tracks
+the estate's existing flow.
+PRV-1 [S] Read the cassandra-control-repo Hiera hierarchy: show which
+          customer / environment / cluster / DC each node belongs to and the
+          Hiera values that apply to it (cluster, DC and node layers).
+PRV-2 [S] Wizards for add node, remove/decommission node, replace dead
+          node, add datacenter, rolling restart: each wizard runs pre-checks
+          (RF, disk headroom, streaming, schema agreement), then triggers
+          the matching Rundeck job or estate script (decommission-node,
+          prepare-replacement, rebuild-node, rolling_restart, drain-node,
+          ...), then shows progress from cluster state.
+PRV-3 [S] Show and trigger Puppet runs on a node (last run time, status,
+          changed resources), via Rundeck or SSH.
+PRV-4 [C] Open a Git pull request on the control repo for Hiera changes
+          made in a form (e.g. new node file, changed setting) instead of
+          editing YAML by hand.
+PRV-5 [C] Kubernetes clusters run by K8ssandra / cass-operator: show the
+          CassandraDatacenter resource and scale/restart through it.
+
+4.21 ESTATE SCRIPT RUNNER (RUN)
+-------------------------------
+RUN-1 [S] Catalogue of the ops scripts already installed on nodes by
+          Puppet (node_health_check, disk-health-check, table-stats,
+          tombstone-scan, compaction-analyzer, query-analyzer,
+          jvm-performance-monitor, capacity-planner, cleanup-node,
+          clear-cache, ...), each with a description and parameters form.
+RUN-2 [S] Run a script on one node, a DC or the whole cluster (parallel or
+          rolling); output streamed live per node, saved to history.
+RUN-3 [S] Same safety rules as OPS: read-only scripts run freely,
+          changing scripts need confirmation and are audited; PROD needs
+          the cluster name typed.
+RUN-4 [C] Users can add their own scripts to the catalogue (admin-approved
+          on Studio Server).
+
+4.22 CAPACITY PLANNING (CAP)
+----------------------------
+CAP-1 [S] Growth trends per cluster, keyspace and table (data size, write
+          rate) and forecast of when disks reach 50 / 70 / 80 % (compaction
+          headroom).
+CAP-2 [S] "What if" calculator: add nodes, change RF, change compaction
+          strategy, change TTL - estimated per-node load and headroom.
+CAP-3 [C] Monthly capacity report per cluster, exportable (PDF/HTML).
 
 
 --------------------------------------------------------------------------------
@@ -309,6 +653,39 @@ NFR-UPD  [S] Auto-update check (can be disabled for offline/air-gapped use).
 NFR-I18N [C] Translatable UI strings (English first).
 NFR-LIC  [M] Only open-source dependencies with licences compatible with
              internal and commercial use (Apache-2.0, MIT, BSD, EPL).
+             Bundled tools (DSBulk, NoSQLBench, async-profiler) are
+             Apache-2.0; their licences ship with the installer.
+
+Production-grade engineering
+NFR-SCALE [M] Tested at 500 nodes in one cluster and 100 clusters per
+             Studio Server; UI stays responsive (< 200 ms for interactions,
+             < 2 s to open any dashboard).
+NFR-SSDLC [M] Threat model per release; static analysis and dependency/CVE
+             scanning in CI (fail on high/critical); SBOM (CycloneDX)
+             published with every release; secret scanning on the repo.
+NFR-SIGN [M] All installers and the server image are signed (Windows
+             Authenticode, Apple Developer ID + notarisation, GPG-signed
+             .deb/.rpm repos, cosign for the container image). Auto-update
+             only installs signed builds.
+NFR-NET  [M] Works behind corporate HTTP(S) proxies and custom CA bundles;
+             fully offline installers for air-gapped sites.
+NFR-DATA [M] Studio's own local and server databases are versioned and
+             migrated automatically on upgrade; a downgrade never corrupts
+             them; backup/restore of Studio's own settings.
+NFR-OBS  [S] Studio Server exposes its own health endpoint, Prometheus
+             metrics and structured logs; desktop crash reports are written
+             locally and only sent to a self-hosted endpoint if configured.
+NFR-A11Y [S] WCAG 2.1 AA: full keyboard use, screen-reader labels, colour-
+             blind-safe chart palettes (state never shown by colour alone).
+NFR-DOCS [M] User guide, admin/install guide, runbook for every operation
+             wizard, in-app help links, release notes per version.
+NFR-SUPP [M] Support policy: every Cassandra version the Apache project
+             still supports, plus 3.11 for the estate; a new Cassandra minor
+             is certified within 4 weeks of release (contract tests, PLAN
+             section 4).
+NFR-QUAL [M] Release gates: unit + contract + integration + UI end-to-end
+             suites green on all supported versions; no open P1/P2 bugs;
+             installer smoke test on clean Windows, macOS and Linux VMs.
 
 
 --------------------------------------------------------------------------------
@@ -318,12 +695,20 @@ A-1 SSH access to nodes is available to tool users; that is how JMX is
     reached on the current estate (JMX is bound to localhost).
 A-2 Users accept the jmx_exporter fallback (CON-6c) gives metrics only, no
     operations.
-Q-1 Should operations (OPS) be available to everyone, or only to users
-    whose connection has an "operator" role flag?
-Q-2 Is a shared, central connection list needed (e.g. a Git repo or file
-    share), or is file import/export (CON-9) enough?
+A-3 Rundeck and the estate scripts installed by cassandra_pfpt are the
+    supported way to change nodes; Studio drives them (PRV, RUN, BAK).
+A-4 Studio Server can be hosted inside the network that reaches the
+    clusters (it needs CQL, SSH/JMX and object-storage access).
+Q-1 Who may run operations? Proposed answer: RBAC roles in SRV-2; in
+    desktop-only mode, a per-connection "operator" flag.
+Q-2 Shared connection list? Proposed answer: Studio Server catalogue
+    (SRV-3); file import/export (CON-9) stays for desktop-only users.
 Q-3 Is DataStax Enterprise or ScyllaDB support ever needed?
 Q-4 Licence of the tool itself: internal-only, or open source?
+Q-5 Is Studio Server in scope for v1.0, or desktop-only first?
+    The plan assumes it ships in v1.1 (scheduled repair, backup, alerts).
+Q-6 Is a Reaper or Medusa deployment already running anywhere in the
+    estate, or are the estate scripts and systemd timers the only ones?
 
 
 --------------------------------------------------------------------------------
@@ -339,4 +724,22 @@ Q-4 Licence of the tool itself: internal-only, or open source?
    read-only connection and asks for confirmation on PROD.
 6. Run flush + repair on one node and see progress; audit log records it.
 7. Stop one node: within one poll interval it shows DOWN and a RED alert.
+8. Load a Java 8 CMS log and a Java 17 G1 log from nodes over SSH; the GC
+   report shows pauses, heap charts and at least one tuning finding.
+9. Take a thread dump and a top-threads view from a node via JMX.
+10. Run a backup through the estate scripts and see it in the catalogue.
+11. Run the drift report on a cluster where one node has a changed
+    setting; the difference is shown.
+
+ACCEPTANCE CRITERIA (v1.1 - Studio Server)
+1. Log in through SSO; a "viewer" cannot run a write, operation or script.
+2. A segmented repair schedule runs overnight with no desktop app open;
+   history shows per-segment results and the gc_grace coverage is green.
+3. A backup schedule runs; a backup is verified; a table is restored to a
+   scratch cluster with the guided restore.
+4. A RED alert reaches Slack/e-mail with no desktop app open.
+5. Unload a 10 GB table with the bulk tool from the server, then load it
+   into another cluster; row counts match.
+6. A stress run against a DEV cluster shows its results next to cluster
+   metrics; the same run is blocked against PROD.
 ================================================================================
