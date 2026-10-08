@@ -66,14 +66,29 @@ jobs:
           fi
       - name: Build installer
         env:
-          # Signing runs only when these secrets are configured (NFR-SIGN); otherwise unsigned builds.
-          CSC_LINK: ${{ runner.os == 'macOS' && secrets.MAC_CERT_P12_BASE64 || secrets.WIN_CERT_PFX_BASE64 }}
-          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && secrets.MAC_CERT_PASSWORD || secrets.WIN_CERT_PASSWORD }}
+          # Signing secrets (NFR-SIGN). Each is exported only when it is set: an empty
+          # CSC_LINK makes electron-builder treat "" as a path and fail.
+          MAC_CERT: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          WIN_CERT: ${{ secrets.WIN_CERT_PFX_BASE64 }}
+          WIN_CERT_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
+          NOTARY_APPLE_ID: ${{ secrets.APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: scripts/package.sh ${{ matrix.builder-args }}
+        run: |
+          args="${{ matrix.builder-args }}"
+          if [ "$RUNNER_OS" = "macOS" ]; then cert="$MAC_CERT"; pass="$MAC_CERT_PASSWORD"; else cert="$WIN_CERT"; pass="$WIN_CERT_PASSWORD"; fi
+          if [ -n "$cert" ]; then
+            export CSC_LINK="$cert" CSC_KEY_PASSWORD="$pass"
+            if [ "$RUNNER_OS" = "macOS" ] && [ -n "$NOTARY_APPLE_ID" ]; then
+              export APPLE_ID="$NOTARY_APPLE_ID" APPLE_APP_SPECIFIC_PASSWORD="$NOTARY_PASSWORD" APPLE_TEAM_ID="$NOTARY_TEAM_ID"
+            fi
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            # No Developer ID yet: ad-hoc sign, without which Apple Silicon reports the app as damaged.
+            args="$args -c.mac.identity=-"
+          fi
+          scripts/package.sh $args
       - name: Checksums
         working-directory: desktop/dist
         run: |
