@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine-unit:
+    name: Engine unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21", cache: gradle }
+      - name: Unit tests
+        working-directory: engine
+        run: ./gradlew --no-daemon test
+      - name: SBOM (CycloneDX)
+        working-directory: engine
+        run: ./gradlew --no-daemon cyclonedxBom
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: engine-unit-reports
+          path: |
+            engine/build/reports/tests
+            engine/build/reports/bom.*
+          retention-days: 14
+
+  engine-integration:
+    name: Integration (Cassandra ${{ matrix.cassandra }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The estate's mix: 3.11 on Java 8, 4.1 on Java 11, 5.0 on Java 17.
+        cassandra: ["3.11", "4.1", "5.0"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21", cache: gradle }
+      - name: Integration tests against a real Cassandra container
+        working-directory: engine
+        run: ./gradlew --no-daemon test -Pintegration -PcassandraVersions=${{ matrix.cassandra }} --tests '*IntegrationTest'
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: integration-reports-${{ matrix.cassandra }}
+          path: engine/build/reports/tests
+          retention-days: 14
+
+  ui:
+    name: UI typecheck, tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: ui/package-lock.json }
+      - working-directory: ui
+        run: npm ci --no-audit --no-fund
+      - name: Unit tests
+        working-directory: ui
+        run: npm test
+      - name: Typecheck and build
+        working-directory: ui
+        run: npm run build
+      - name: Audit production dependencies
+        working-directory: ui
+        run: npm audit --omit=dev --audit-level=high

@@ -1,0 +1,99 @@
+name: Release
+
+# Builds the desktop installers on each OS. A tag like v0.1.0 (or v0.1.0-alpha.1 for a
+# pre-release) publishes them as a GitHub Release; a manual run only uploads them as
+# workflow artifacts.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installers:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64 (AppImage, deb, rpm)
+            os: ubuntu-latest
+            java-arch: x64
+            builder-args: --linux AppImage deb rpm --x64
+          - name: Windows x64 (installer)
+            os: windows-latest
+            java-arch: x64
+            builder-args: --win nsis --x64
+          - name: macOS Apple Silicon (dmg)
+            os: macos-latest
+            java-arch: aarch64
+            builder-args: --mac dmg --arm64
+          - name: macOS Intel (dmg)
+            os: macos-latest
+            # An x64 JDK (runs under Rosetta) so jlink produces an x64 runtime.
+            java-arch: x64
+            builder-args: --mac dmg --x64
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21", architecture: "${{ matrix.java-arch }}", cache: gradle }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: rpm tooling
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm
+      - name: Version from tag
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "STUDIO_VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_ENV"; fi
+      - name: Build installer
+        env:
+          # Signing runs only when these secrets are configured (NFR-SIGN); otherwise unsigned builds.
+          CSC_LINK: ${{ runner.os == 'macOS' && secrets.MAC_CERT_P12_BASE64 || secrets.WIN_CERT_PFX_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && secrets.MAC_CERT_PASSWORD || secrets.WIN_CERT_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: scripts/package.sh ${{ matrix.builder-args }}
+      - name: Checksums
+        working-directory: desktop/dist
+        run: |
+          for f in *.AppImage *.deb *.rpm *.exe *.dmg; do
+            [ -f "$f" ] || continue
+            if command -v sha256sum >/dev/null; then sha256sum "$f" > "$f.sha256"; else shasum -a 256 "$f" > "$f.sha256"; fi
+          done
+          ls -la
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ runner.os }}-${{ matrix.java-arch }}
+          path: |
+            desktop/dist/*.AppImage
+            desktop/dist/*.deb
+            desktop/dist/*.rpm
+            desktop/dist/*.exe
+            desktop/dist/*.dmg
+            desktop/dist/*.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish GitHub Release
+    needs: installers
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true

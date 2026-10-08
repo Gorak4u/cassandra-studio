@@ -18,17 +18,70 @@
     "appId": "com.cassandrastudio.desktop",
     "productName": "Cassandra Studio",
     "artifactName": "CassandraStudio-${version}-${os}-${arch}.${ext}",
-    "files": ["main.js", "preload.js", "package.json"],
-    "extraResources": [
-      { "from": "resources/engine", "to": "engine" },
-      { "from": "resources/runtime", "to": "runtime" },
-      { "from": "resources/ui", "to": "ui" }
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
     ],
-    "directories": { "output": "dist", "buildResources": "build" },
-    "linux": { "target": ["AppImage", "deb", "rpm"], "category": "Development" },
-    "deb": { "depends": [] },
-    "win": { "target": ["nsis"] },
-    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true },
-    "mac": { "target": ["dmg"], "category": "public.app-category.developer-tools", "hardenedRuntime": true }
+    "extraResources": [
+      {
+        "from": "resources/engine",
+        "to": "engine"
+      },
+      {
+        "from": "resources/runtime",
+        "to": "runtime"
+      },
+      {
+        "from": "resources/ui",
+        "to": "ui"
+      }
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "category": "Development",
+      "maintainer": "Cassandra Studio <noreply@cassandra-studio.invalid>",
+      "synopsis": "Manage, monitor and query Apache Cassandra clusters"
+    },
+    "deb": {
+      "depends": []
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Gorak4u",
+        "repo": "cassandra-studio"
+      }
+    ]
+  },
+  "homepage": "https://github.com/Gorak4u/cassandra-studio",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Gorak4u/cassandra-studio.git"
   }
 }
