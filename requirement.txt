@@ -1,0 +1,342 @@
+================================================================================
+ CASSANDRA STUDIO - REQUIREMENTS SPECIFICATION
+ Version 1.0 (draft)                                         Date: 2026-10-08
+================================================================================
+
+Working name : Cassandra Studio
+Product type : Cross-platform desktop application (GUI)
+Purpose      : One tool to connect to, monitor, query and operate any number
+               of Apache Cassandra clusters, regardless of the Cassandra or
+               Java version each one runs.
+
+Requirement IDs use these prefixes:
+  CON  connection management          MON  monitoring and graphs (JMX)
+  CQL  query editor and data tools    SCH  schema / object browser
+  OPS  cluster operations (nodetool)  SEC  users, roles, security
+  ALR  warnings, errors, alerts       NFR  non-functional
+Priority: [M] must have (MVP)   [S] should have (v1.x)   [C] could have (later)
+
+
+--------------------------------------------------------------------------------
+1. BACKGROUND AND PROBLEM STATEMENT
+--------------------------------------------------------------------------------
+The estate runs many Cassandra clusters across customers and environments
+(dev / staging / nonprod / prod), with mixed versions:
+
+  Cassandra : 3.11.x, 4.0.x, 4.1.x, 5.0.x
+  Java      : 8, 11, 17
+
+Today, operating them needs several tools: cqlsh, nodetool over SSH,
+DBeaver/DevCenter for queries, and Prometheus/Grafana for metrics. None of
+them gives a single view per cluster, and DevCenter is discontinued.
+
+Facts about the current nodes that shape this design:
+  - JMX (port 7199) is bound to localhost only (LOCAL_JMX=yes, no auth).
+    A desktop tool CANNOT reach JMX directly over the network.
+  - Every node runs the Prometheus jmx_exporter agent on port 7071 (HTTP).
+  - Client traffic (CQL, port 9042) may use TLS and PasswordAuthenticator.
+  - Operators reach nodes over SSH.
+The tool must therefore support more than one way of reading JMX (see CON-6).
+
+
+--------------------------------------------------------------------------------
+2. SCOPE
+--------------------------------------------------------------------------------
+IN SCOPE
+  - Apache Cassandra 3.11, 4.0, 4.1, 5.0 (and later versions as released).
+  - Connection management, monitoring, CQL editor, schema browser, data
+    editing, import/export, nodetool-style operations, user/role management.
+  - Installers for Windows, macOS (Intel + Apple Silicon), Linux (Ubuntu/
+    Debian .deb, RHEL/Rocky .rpm, generic AppImage).
+
+OUT OF SCOPE (v1)
+  - Non-Cassandra databases (MySQL, Postgres, ...). "All features of DBeaver"
+    means the DBeaver feature set APPLIED TO CASSANDRA, not multi-database.
+  - Relational-only features (ER diagrams with foreign keys, joins, SQL
+    query builder) - Cassandra has no such concepts.
+  - Installing, provisioning or upgrading Cassandra itself (that is Puppet's
+    job in cassandra-control-repo).
+  - DataStax Enterprise-only features (Search, Graph, Analytics).
+  - Long-term metrics storage replacing Prometheus/Grafana.
+
+
+--------------------------------------------------------------------------------
+3. USERS
+--------------------------------------------------------------------------------
+  DBA / SRE        : monitors health, runs repairs/compactions, manages users.
+  Developer        : browses schema, runs queries, edits test data.
+  Read-only viewer : looks at dashboards and data, cannot change anything.
+
+
+--------------------------------------------------------------------------------
+4. FUNCTIONAL REQUIREMENTS
+--------------------------------------------------------------------------------
+
+4.1 CONNECTION MANAGEMENT (CON)
+-------------------------------
+CON-1 [M] Create, edit, clone, delete and test a connection. A connection is
+          one CLUSTER, defined by one or more contact points (host:port).
+CON-2 [M] Organise connections in a tree of folders, e.g.
+            Customer > Environment > Cluster > Datacenter
+          with drag-and-drop, rename, search/filter and colour tags.
+CON-3 [M] Mark each connection with an environment (DEV/TEST/STAGING/PROD).
+          PROD connections show a red banner and ask for confirmation before
+          any write, DDL or operation (see NFR-SAFE).
+CON-4 [M] CQL connection settings per connection:
+            - username/password (PasswordAuthenticator), or none
+            - TLS: on/off, truststore/keystore (JKS/PKCS12/PEM), host
+              verification on/off, client certificate (mTLS)
+            - protocol version: auto-negotiate, or force v3/v4/v5
+            - local datacenter (for load balancing), default consistency,
+              request timeout, page size
+CON-5 [M] Auto-discover all nodes of the cluster from the contact points
+          (system.peers / system.peers_v2), with DC, rack, version, tokens.
+CON-6 [M] JMX access method, selectable per connection (node-level overrides
+          allowed):
+            a) Direct JMX/RMI       host:7199, optional user/password, SSL
+            b) JMX over SSH tunnel  SSH to node, then localhost:7199
+                                    (default for this estate)
+            c) jmx_exporter HTTP    read http://node:7071/metrics
+                                    (read-only metrics, no operations)
+            d) None                 CQL-only connection
+CON-7 [M] SSH settings for (b): user, port, key file / ssh-agent / password,
+          optional jump host (bastion), known_hosts checking.
+CON-8 [M] Secrets (passwords, key passphrases) are stored in the OS keychain
+          (Windows Credential Manager, macOS Keychain, Linux Secret Service),
+          never in plain text in the config file.
+CON-9 [M] Import/export connections as a file (JSON/YAML) WITHOUT secrets,
+          so a team can share one connection list.
+CON-10[S] Import clusters from cassandra-control-repo Hiera data
+          (data/customers/<c>/<env>/products/cassandra/clusters/*) - seeds,
+          DC names and environment become a ready connection tree.
+CON-11[S] Connect to several clusters at the same time, each in its own tab.
+CON-12[S] Per-connection "read-only" flag that disables all writes.
+CON-13[C] Import connections from DBeaver and DevCenter export files.
+
+4.2 MONITORING AND GRAPHS (MON)
+-------------------------------
+General
+MON-1 [M] Metrics come from JMX of EACH node (via CON-6 a/b/c). The tool
+          polls on a configurable interval (default 10 s, min 2 s).
+MON-2 [M] Version-aware metric catalogue: MBean names and attributes are
+          mapped per Cassandra version (3.11 / 4.0 / 4.1 / 5.0) and per GC
+          type (CMS, ParNew, G1, ZGC, Shenandoah), so the same graph works on
+          every cluster.
+MON-3 [M] Graphs show live data plus local history (default 24 h, set in
+          preferences), with zoom, pan, time-range picker, pause, and
+          per-node / per-DC / cluster aggregation.
+MON-4 [M] Export any graph as PNG/CSV.
+MON-5 [S] Custom dashboards: user picks any MBean attribute and builds a
+          graph; dashboards can be saved and shared as files.
+MON-6 [S] Side-by-side compare of two nodes or two time ranges.
+
+Required dashboards / views
+MON-10 [M] CLUSTER HEALTH overview
+           - nodes Up/Down, Normal/Joining/Leaving/Moving (UN/DN/UJ/...)
+           - schema agreement (all nodes on same schema version?)
+           - version mix (Cassandra + Java per node)
+           - overall status: GREEN / YELLOW / RED with reasons
+MON-11 [M] CLUSTER DETAILS: name, partitioner, snitch, DCs, racks, node
+           count, total load, keyspace count, Cassandra/Java versions.
+MON-12 [M] NODE DETAILS (per node): host ID, address, DC/rack, uptime,
+           version, Java version + vendor, heap used/max, off-heap, load,
+           number of tokens, thread pools (active/pending/blocked/dropped),
+           compactions pending/active, hints, disk usage per data directory,
+           CPU and open file descriptors (from JVM OperatingSystem MBean).
+MON-13 [M] TOKEN DETAILS: tokens per node, vnode count, token ranges,
+           ownership % and effective ownership per keyspace.
+MON-14 [M] RING STRUCTURE: graphical ring per DC, nodes placed by token,
+           coloured by state and by load; hover shows the node card; click
+           opens node details. Table view equivalent to `nodetool ring`.
+MON-15 [M] LOAD AND USAGE: data load per node, disk used/free, SSTable
+           count, live vs total disk space, load imbalance indicator.
+MON-16 [M] GC USAGE AND PRESSURE: GC count and time per collector, GC time %
+           of wall clock (pressure), longest pause, heap before/after,
+           memory pools (Eden/Survivor/Old/Metaspace), allocation rate.
+MON-17 [M] READS AND WRITES: client request rate and latency (p50/p75/p95/
+           p99/max) for Read, Write, RangeSlice, CAS; timeouts,
+           unavailables, failures - per node and per cluster.
+MON-18 [M] KEYSPACE AND TABLE METRICS: per keyspace and per table read/
+           write count and latency, partition size (mean/max), cells/
+           tombstones per read, SSTables per read, bloom filter false
+           positive ratio, key/row cache hit rate, pending compactions.
+MON-19 [S] THREAD POOLS and DROPPED MESSAGES (equivalent to `nodetool
+           tpstats`) as a live table plus graphs.
+MON-20 [S] COMPACTION and STREAMING progress (live, like `nodetool
+           compactionstats` / `netstats`).
+MON-21 [S] Top tables: "hottest" tables by reads, writes, latency, size.
+MON-22 [C] Client connections view (connected clients, driver, version) -
+           Cassandra 4.0+ (system_views.clients).
+
+4.3 CQL EDITOR AND DATA TOOLS (CQL)  - DBeaver / DevCenter parity
+-----------------------------------------------------------------
+CQL-1 [M] Multi-tab CQL editor with syntax highlighting, auto-complete of
+          keywords, keyspaces, tables, columns, functions and types (driven
+          by the live schema), bracket matching, formatting, comments.
+CQL-2 [M] Run statement under cursor, run selection, run whole script.
+          Script mode stops or continues on error (user choice).
+CQL-3 [M] Run a query on a CHOSEN NODE: the user picks the coordinator node
+          (any node of the cluster) or "auto" (driver load balancing).
+          Optionally run the same query on every node and compare results.
+CQL-4 [M] Per-query settings: consistency level, serial consistency, page
+          size, timeout, tracing on/off.
+CQL-5 [M] Result grid: paging (fetch next page / fetch all with limit), sort,
+          filter, column resize/hide, copy cells/rows, show collections,
+          UDTs, blobs, JSON, timestamps in chosen time zone.
+CQL-6 [M] Query tracing view: trace events per node with elapsed time
+          (replaces "explain plan", which Cassandra does not have).
+CQL-7 [M] Messages/log panel: warnings returned by the server (e.g. large
+          batch, tombstone warnings), errors, execution time, coordinator.
+CQL-8 [M] Query history (searchable, per connection) and saved scripts
+          (folders, open/save .cql files).
+CQL-9 [M] Edit data in the grid: insert row, update cell, delete row. The
+          tool generates the CQL, shows it, and runs only on confirm.
+          Requires full primary key; disabled on read-only/PROD-by-default.
+CQL-10[M] Export results: CSV, JSON, CQL INSERT statements, Excel (.xlsx).
+CQL-11[S] Import data from CSV/JSON into a table, with column mapping,
+          batch size, rate limit and error file (like cqlsh COPY FROM).
+CQL-12[S] Parameterised queries (bind variables prompt), prepared statements.
+CQL-13[S] Snippets/templates library (create table, select by key, etc.).
+CQL-14[S] Warnings before running risky statements: ALLOW FILTERING, missing
+          partition key in WHERE, TRUNCATE, DROP, full-table scans.
+CQL-15[C] Visual query builder for SELECT on one table.
+CQL-16[C] Result diff between two queries / two clusters.
+
+4.4 SCHEMA / OBJECT BROWSER (SCH)
+---------------------------------
+SCH-1 [M] Tree: Cluster > Keyspaces > Tables / Materialized Views /
+          Indexes (2i, SASI, SAI on 5.0) / UDTs / Functions / Aggregates.
+          System keyspaces hidden by default, toggle to show.
+SCH-2 [M] KEYSPACE DETAILS: replication strategy and factor per DC,
+          durable_writes, tables list, size on disk (from metrics).
+SCH-3 [M] TABLE DETAILS: columns with type and role (partition key,
+          clustering key + order, static, regular), all table options
+          (compaction, compression, gc_grace_seconds, TTL, caching, ...),
+          indexes, views, size and SSTable stats, and the full DDL.
+SCH-4 [M] Create / alter / drop keyspace, table, index, type, view through
+          forms; the generated CQL is always shown before it is executed.
+SCH-5 [M] Copy DDL of one object or the whole keyspace ("DESCRIBE").
+SCH-6 [S] Schema compare between two keyspaces / two clusters, generating
+          the ALTER script.
+SCH-7 [S] Data model checks: warn on very wide partitions, too many tables,
+          secondary indexes on high-cardinality columns, missing TTL with
+          TWCS, gc_grace_seconds = 0, RF=1 in production, SimpleStrategy
+          in multi-DC clusters.
+SCH-8 [C] Visual diagram of tables and UDT usage per keyspace.
+
+4.5 CLUSTER OPERATIONS (OPS)  - nodetool through the GUI
+--------------------------------------------------------
+All operations run through JMX (method a or b in CON-6). Each one shows the
+equivalent nodetool command, asks for confirmation (twice on PROD), streams
+progress, and is written to the audit log (NFR-AUD).
+OPS-1 [M] Status/info views: status, info, ring, describecluster, tpstats,
+          tablestats, tablehistograms, proxyhistograms, gossipinfo,
+          compactionstats, netstats, getendpoints <ks> <table> <key>.
+OPS-2 [M] Flush, compact (major / user-defined), cleanup, scrub,
+          upgradesstables, garbagecollect - per node, keyspace or table.
+OPS-3 [M] Repair: full / incremental / sub-range, -pr, by DC, with live
+          progress from JMX notifications; cancel running repair.
+OPS-4 [M] Snapshots: create, list, clear (per keyspace/table, per node or
+          all nodes).
+OPS-5 [S] Drain, stop/start gossip, binary (CQL), handoff; disable/enable
+          autocompaction; set compaction/stream throughput; set log level.
+OPS-6 [S] Decommission, removenode, assassinate, move - expert mode only,
+          with pre-checks (enough replicas, no streaming running).
+OPS-7 [S] Run an operation on many nodes in sequence (rolling), with pause
+          between nodes and stop-on-error.
+OPS-8 [C] Scheduled jobs (e.g. weekly repair) - only if not already done by
+          the estate's systemd timers.
+
+4.6 USERS, ROLES AND SECURITY (SEC)
+-----------------------------------
+SEC-1 [M] USER DETAILS: list roles with login, superuser, member-of, and
+          granted permissions per resource (LIST ROLES / LIST ALL
+          PERMISSIONS).
+SEC-2 [M] Create / alter / drop role, change password, grant / revoke role
+          and permissions, through forms that show the CQL.
+SEC-3 [S] Check system_auth replication: warn if RF is too low or uses
+          SimpleStrategy in a multi-DC cluster.
+SEC-4 [S] Show which permissions a role effectively has (incl. inherited).
+SEC-5 [C] Network authorization (DC-restricted roles, Cassandra 4.0+).
+
+4.7 WARNINGS, ERRORS AND ALERTS (ALR)
+-------------------------------------
+ALR-1 [M] Built-in health rules, evaluated on every poll, shown as a
+          warnings panel and as badges on clusters/nodes, e.g.:
+            - node down / not NORMAL / schema disagreement
+            - heap > 85 %, GC time > 10 % or pause > 1 s
+            - dropped messages, timeouts, unavailables > 0
+            - pending compactions > threshold, SSTables per read > threshold
+            - disk usage > 80 %, load imbalance > 1.5x average
+            - hints building up, pending/blocked thread pools
+            - tombstone warnings, large partitions
+          Thresholds are editable globally and per cluster.
+ALR-2 [M] Server warnings and errors from CQL responses are kept in a log.
+ALR-3 [S] Node log viewer: tail and search system.log / debug.log of a node
+          over SSH; filter by level WARN/ERROR; highlight known patterns
+          (GC pauses, dropped mutations, OOM, compaction errors).
+ALR-4 [S] Desktop notifications when a rule turns RED (opt-in per cluster).
+ALR-5 [C] Send alerts to Slack / e-mail / webhook.
+
+
+--------------------------------------------------------------------------------
+5. NON-FUNCTIONAL REQUIREMENTS (NFR)
+--------------------------------------------------------------------------------
+NFR-PLAT [M] Installers: Windows 10/11 (.msi/.exe), macOS 12+ (.dmg,
+             signed + notarised, Intel and Apple Silicon), Ubuntu 20.04+
+             (.deb), RHEL/Rocky 8+ (.rpm), AppImage. No separate Java or
+             Cassandra install needed on the user's machine (runtime bundled).
+NFR-COMPAT [M] Works with Cassandra 3.11, 4.0, 4.1, 5.0 running on Java 8,
+             11 or 17 in the same session. Newer versions degrade gracefully
+             (unknown metrics hidden, not crashing).
+NFR-PERF [M] Start in < 5 s. Handle 50+ saved clusters and clusters of 100+
+             nodes. Poll only the clusters that are open. Monitoring must add
+             negligible load to Cassandra (one JMX connection per node,
+             bulk attribute reads, configurable interval).
+NFR-SAFE [M] Safe by default: read-only and PROD flags respected everywhere;
+             every write/DDL/operation shows the exact CQL or nodetool
+             equivalent and needs confirmation; destructive actions on PROD
+             need typing the cluster name.
+NFR-SEC  [M] Secrets in the OS keychain; TLS everywhere it is configured;
+             no telemetry; no data leaves the machine except to the clusters.
+NFR-AUD  [M] Local audit log of every write, DDL and operation: who, when,
+             cluster, node, statement, result. Exportable.
+NFR-UX   [M] Light and dark theme, keyboard shortcuts, resizable/dockable
+             panels, remembers open tabs and layout.
+NFR-RELI [M] Losing a node or a JMX connection never freezes the UI; it shows
+             the node as unreachable and keeps retrying with back-off.
+NFR-UPD  [S] Auto-update check (can be disabled for offline/air-gapped use).
+NFR-I18N [C] Translatable UI strings (English first).
+NFR-LIC  [M] Only open-source dependencies with licences compatible with
+             internal and commercial use (Apache-2.0, MIT, BSD, EPL).
+
+
+--------------------------------------------------------------------------------
+6. ASSUMPTIONS AND OPEN QUESTIONS
+--------------------------------------------------------------------------------
+A-1 SSH access to nodes is available to tool users; that is how JMX is
+    reached on the current estate (JMX is bound to localhost).
+A-2 Users accept the jmx_exporter fallback (CON-6c) gives metrics only, no
+    operations.
+Q-1 Should operations (OPS) be available to everyone, or only to users
+    whose connection has an "operator" role flag?
+Q-2 Is a shared, central connection list needed (e.g. a Git repo or file
+    share), or is file import/export (CON-9) enough?
+Q-3 Is DataStax Enterprise or ScyllaDB support ever needed?
+Q-4 Licence of the tool itself: internal-only, or open source?
+
+
+--------------------------------------------------------------------------------
+7. ACCEPTANCE CRITERIA (MVP)
+--------------------------------------------------------------------------------
+1. Install on Windows, macOS and Ubuntu from the release installers.
+2. Save 3 clusters (3.11/Java 8, 4.1/Java 11, 5.0/Java 17) in folders by
+   environment; secrets land in the OS keychain.
+3. Connect to each; health, node, token, ring, load, GC, read/write,
+   keyspace and table dashboards show live data via SSH-tunnelled JMX.
+4. Run a CQL query on a chosen node, with tracing; export the result to CSV.
+5. Edit a row in the grid on a DEV cluster; the same action is blocked on a
+   read-only connection and asks for confirmation on PROD.
+6. Run flush + repair on one node and see progress; audit log records it.
+7. Stop one node: within one poll interval it shows DOWN and a RED alert.
+================================================================================
