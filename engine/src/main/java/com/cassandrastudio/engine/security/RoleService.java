@@ -4,8 +4,14 @@ import com.cassandrastudio.engine.cql.Errors;
 import com.cassandrastudio.engine.cql.SessionManager;
 import com.cassandrastudio.engine.schema.DdlBuilder;
 import com.cassandrastudio.engine.util.ApiException;
+import com.datastax.oss.driver.api.core.CqlIdentifier;
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.DefaultConsistencyLevel;
 import com.datastax.oss.driver.api.core.cql.Row;
+import com.datastax.oss.driver.api.core.cql.SimpleStatement;
+import com.datastax.oss.driver.api.core.metadata.Node;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -26,7 +32,17 @@ public final class RoleService {
 
     public record Permission(String role, String resource, String permission) {}
 
-    public record RolesView(List<Role> roles, String rolesError, List<Permission> permissions, String permissionsError) {}
+    public record RolesView(List<Role> roles, String rolesError, List<Permission> permissions, String permissionsError,
+                            List<String> warnings) {}
+
+    /**
+     * Read at ONE: auth data is replicated by system_auth's own settings, and a cluster whose
+     * system_auth is under-replicated (the default SimpleStrategy RF=1 in a multi-DC cluster)
+     * would otherwise fail a LOCAL_QUORUM read. That condition is reported in {@link #authReplicationWarnings}.
+     */
+    private static SimpleStatement read(String cql) {
+        return SimpleStatement.newInstance(cql).setConsistencyLevel(DefaultConsistencyLevel.ONE);
+    }
 
     /** Roles from system_auth.roles and all permissions; each half reports its own error (e.g. AllowAllAuthorizer). */
     public RolesView list(String connectionId) {
@@ -34,7 +50,7 @@ public final class RoleService {
         List<Role> roles = new ArrayList<>();
         String rolesError = null;
         try {
-            for (Row r : s.execute("SELECT role, can_login, is_superuser, member_of FROM system_auth.roles")) {
+            for (Row r : s.execute(read("SELECT role, can_login, is_superuser, member_of FROM system_auth.roles"))) {
                 roles.add(new Role(r.getString("role"), r.getBoolean("can_login"), r.getBoolean("is_superuser"),
                         r.isNull("member_of") ? List.of() : r.getSet("member_of", String.class).stream().sorted().toList()));
             }
@@ -45,20 +61,68 @@ public final class RoleService {
         List<Permission> perms = new ArrayList<>();
         String permsError = null;
         try {
-            for (Row r : s.execute("LIST ALL PERMISSIONS")) {
+            for (Row r : s.execute(read("LIST ALL PERMISSIONS"))) {
                 perms.add(new Permission(r.getString("role"), r.getString("resource"), r.getString("permission")));
             }
         } catch (RuntimeException e) {
             permsError = Errors.describe(e);
         }
-        return new RolesView(roles, rolesError, perms, permsError);
+        List<String> warnings = new ArrayList<>(authReplicationWarnings(s));
+        if (rolesError != null && rolesError.contains("anonymous")
+                || permsError != null && permsError.contains("anonymous")) {
+            warnings.add("This cluster does not use PasswordAuthenticator: Cassandra allows no role or permission"
+                    + " changes from anonymous clients.");
+        }
+        return new RolesView(roles, rolesError, perms, permsError, warnings);
+    }
+
+    /** SEC-3: system_auth must be replicated to every DC, or logins fail when a node or DC is down. */
+    public static List<String> authReplicationWarnings(CqlSession s) {
+        List<String> out = new ArrayList<>();
+        var ks = s.getMetadata().getKeyspace(CqlIdentifier.fromInternal("system_auth"));
+        if (ks.isEmpty()) return out;
+        Map<String, String> repl = ks.get().getReplication();
+        Map<String, Integer> nodesPerDc = new HashMap<>();
+        for (Node n : s.getMetadata().getNodes().values()) {
+            if (n.getDatacenter() != null) nodesPerDc.merge(n.getDatacenter(), 1, Integer::sum);
+        }
+        String cls = repl.getOrDefault("class", "");
+        if (cls.endsWith("SimpleStrategy")) {
+            int rf = parseInt(repl.get("replication_factor"));
+            if (nodesPerDc.size() > 1) {
+                out.add("system_auth uses SimpleStrategy (RF " + rf + ") in a " + nodesPerDc.size() + "-DC cluster: logins"
+                        + " and role reads can fail when the DC holding the data is unreachable. Use NetworkTopologyStrategy"
+                        + " with RF 3 in every DC (or every node, if fewer), then run repair on system_auth.");
+            } else if (rf < Math.min(3, nodesPerDc.values().stream().mapToInt(Integer::intValue).sum())) {
+                out.add("system_auth replication factor is " + rf + ": losing one node can lock users out. Raise it to 3"
+                        + " (or the node count, if fewer) and repair system_auth.");
+            }
+        } else if (cls.endsWith("NetworkTopologyStrategy")) {
+            nodesPerDc.forEach((dc, nodes) -> {
+                int rf = parseInt(repl.get(dc));
+                if (rf == 0) {
+                    out.add("system_auth is not replicated to " + dc + ": logins through that DC depend on other DCs.");
+                } else if (rf < Math.min(3, nodes)) {
+                    out.add("system_auth has RF " + rf + " in " + dc + " (" + nodes + " nodes); 3, or the node count if fewer, is safer.");
+                }
+            });
+        }
+        return out;
+    }
+
+    private static int parseInt(String v) {
+        try {
+            return v == null ? 0 : Integer.parseInt(v.trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     /** Effective permissions of one role, including those inherited from granted roles (SEC-4). */
     public List<Permission> permissionsOf(String connectionId, String role) {
         try {
             List<Permission> out = new ArrayList<>();
-            for (Row r : sessions.session(connectionId).execute("LIST ALL PERMISSIONS OF " + DdlBuilder.id(role))) {
+            for (Row r : sessions.session(connectionId).execute(read("LIST ALL PERMISSIONS OF " + DdlBuilder.id(role)))) {
                 out.add(new Permission(r.getString("role"), r.getString("resource"), r.getString("permission")));
             }
             return out;

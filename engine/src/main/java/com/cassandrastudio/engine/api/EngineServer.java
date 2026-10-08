@@ -224,6 +224,22 @@ public final class EngineServer implements AutoCloseable {
                 ctx.json(engine.roles.permissionsOf(ctx.pathParam("id"), ctx.pathParam("role"))));
         app.post("/api/roles-cql/{op}", ctx -> ctx.json(Map.of("cql", rolesCql(ctx.pathParam("op"), body(ctx)))));
 
+        // saved scripts (CQL-8)
+        app.get("/api/scripts", ctx -> ctx.json(engine.scripts.list()));
+        app.get("/api/scripts/{id}", ctx -> ctx.json(engine.scripts.get(ctx.pathParam("id"))));
+        app.post("/api/scripts", ctx -> {
+            JsonNode b = body(ctx);
+            ctx.status(201).json(engine.scripts.save(null, text(b, "folder"), text(b, "name"), text(b, "content")));
+        });
+        app.put("/api/scripts/{id}", ctx -> {
+            JsonNode b = body(ctx);
+            ctx.json(engine.scripts.save(ctx.pathParam("id"), text(b, "folder"), text(b, "name"), text(b, "content")));
+        });
+        app.delete("/api/scripts/{id}", ctx -> {
+            engine.scripts.delete(ctx.pathParam("id"));
+            ctx.status(204);
+        });
+
         // audit (NFR-AUD)
         app.get("/api/audit", ctx -> ctx.json(engine.audit.search(ctx.queryParam("connectionId"), ctx.queryParam("q"),
                 ctx.queryParam("since"), intParam(ctx, "limit", 500))));

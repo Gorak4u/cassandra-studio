@@ -102,8 +102,10 @@ jobs:
         with: { distribution: temurin, java-version: "21", cache: gradle }
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: npm, cache-dependency-path: ui/package-lock.json }
-      - name: Start 2-DC Cassandra 4.1 cluster and Cassandra 3.11 (test-env)
-        run: docker compose -f test-env/docker-compose.yml up -d --wait --wait-timeout 600
+      - name: Start test-env (2-DC 4.1 cluster, 3.11, and 5.0 with TLS + login)
+        run: |
+          test-env/make-certs.sh
+          docker compose -f test-env/docker-compose.yml --profile secure up -d --wait --wait-timeout 600
       - name: Build engine and UI
         run: |
           (cd engine && ./gradlew --no-daemon -q shadowJar)
@@ -117,6 +119,12 @@ jobs:
       - name: Drive the UI
         working-directory: ui
         run: node tests/smoke.mjs http://127.0.0.1:18080 e2e "$RUNNER_TEMP/screens"
+      - name: Desktop window (Electron under Xvfb), startup time and clean exit
+        run: |
+          sudo apt-get install -y xvfb >/dev/null
+          RESOURCES_ONLY=1 scripts/package.sh >/dev/null
+          (cd desktop && npm ci --no-audit --no-fund)
+          cd ui && xvfb-run -a -s "-screen 0 1500x950x24" node tests/desktop-window.mjs ../desktop "$RUNNER_TEMP/screens/desktop-window.png" 15000
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -127,8 +135,8 @@ jobs:
         if: failure()
         run: |
           cat "$RUNNER_TEMP/engine.log" || true
-          docker compose -f test-env/docker-compose.yml ps
-          docker compose -f test-env/docker-compose.yml logs --tail 50
+          docker compose -f test-env/docker-compose.yml --profile secure ps
+          docker compose -f test-env/docker-compose.yml --profile secure logs --tail 50
 
   dependency-scan:
     name: Dependency vulnerabilities (Trivy)

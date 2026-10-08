@@ -18,13 +18,15 @@ export function RolesPanel(props: { conn: ConnectionConfig }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [effective, setEffective] = useState<Permission[] | null>(null);
   const [dialog, setDialog] = useState<null | "create" | "password" | "grant">(null);
+  // Bumped after every change so the selected role's effective permissions reload too.
+  const [revision, setRevision] = useState(0);
 
   const load = useCallback(() => { api.roles(props.conn.id!).then(setView).catch(toast.error); }, [props.conn.id, toast]);
   useEffect(load, [load]);
   useEffect(() => {
     setEffective(null);
     if (selected) api.rolePermissions(props.conn.id!, selected).then(setEffective).catch(() => setEffective([]));
-  }, [selected, props.conn.id]);
+  }, [selected, props.conn.id, revision]);
 
   const run = async (op: string, body: unknown) => {
     try {
@@ -34,6 +36,7 @@ export function RolesPanel(props: { conn: ConnectionConfig }) {
       if (res.results[0].status === "error") throw new Error(res.results[0].error);
       toast.ok("Done");
       load();
+      setRevision((r) => r + 1);
       return true;
     } catch (e) {
       toast.error(e);
@@ -92,6 +95,7 @@ export function RolesPanel(props: { conn: ConnectionConfig }) {
             </div>
           );
         })()}
+        {view?.warnings.map((w, i) => <div key={i} className="notice warn" data-testid="auth-warning">⚠ {w}</div>)}
         {view?.permissionsError && <div className="notice warn">Permissions: {view.permissionsError}</div>}
         {!selected && <div className="empty">Select a role. Roles come from system_auth.roles.</div>}
       </div>

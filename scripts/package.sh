@@ -2,6 +2,7 @@
 # Builds the desktop installers for the current OS:
 #   engine jar -> jlink'd Java runtime -> UI -> Electron installer(s) in desktop/dist.
 # Usage: scripts/package.sh [electron-builder args, e.g. --linux AppImage]
+#        RESOURCES_ONLY=1 scripts/package.sh   (engine, runtime and UI only; for running Electron from source)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RES="$ROOT/desktop/resources"
@@ -28,6 +29,8 @@ JLINK="${JAVA_HOME:?JAVA_HOME must point to a JDK 21}/bin/jlink"
 echo "==> ui"
 (cd "$ROOT/ui" && npm ci --no-audit --no-fund && npm run build)
 cp -r "$ROOT/ui/dist" "$RES/ui"
+
+if [ -n "${RESOURCES_ONLY:-}" ]; then echo "resources ready in $RES"; exit 0; fi
 
 echo "==> installer"
 cd "$ROOT/desktop"

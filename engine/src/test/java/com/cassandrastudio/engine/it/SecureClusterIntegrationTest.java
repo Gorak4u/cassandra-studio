@@ -76,13 +76,13 @@ class SecureClusterIntegrationTest {
     private GenericContainer<?> cluster(String version) {
         return containers.computeIfAbsent(version, v -> {
             // Enable client TLS and password auth by editing the stock cassandra.yaml, which works for
-            // 3.11, 4.x and 5.0 alike (5.0 nests the authenticator class, so the class name is swapped).
+            // 3.11, 4.x and 5.0 alike (5.0 nests the authenticator class and ships keystore_password commented out).
             String script = String.join(" && ",
                     "CONF=/etc/cassandra/cassandra.yaml",
                     "sed -i 's/AllowAllAuthenticator/PasswordAuthenticator/; s/AllowAllAuthorizer/CassandraAuthorizer/' $CONF",
                     "sed -i '/^client_encryption_options:/,/^[a-z]/ { s/^\\(\\s*\\)enabled: false/\\1enabled: true/; "
                             + "s#^\\(\\s*\\)keystore: .*#\\1keystore: /certs/node.jks#; "
-                            + "s/^\\(\\s*\\)keystore_password: .*/\\1keystore_password: " + STORE_PASSWORD + "/ }' $CONF",
+                            + "s/^\\(\\s*\\)#\\{0,1\\}keystore_password: .*/\\1keystore_password: " + STORE_PASSWORD + "/ }' $CONF",
                     "exec docker-entrypoint.sh cassandra -f");
             GenericContainer<?> c = new GenericContainer<>("cassandra:" + v)
                     .withEnv("MAX_HEAP_SIZE", "768M")
@@ -92,8 +92,8 @@ class SecureClusterIntegrationTest {
                     .withCopyFileToContainer(MountableFile.forHostPath(certDir.resolve("node.jks")), "/certs/node.jks")
                     .withExposedPorts(9042)
                     .withCreateContainerCmdModifier(cmd -> cmd.withEntrypoint("bash", "-c", script))
-                    .waitingFor(Wait.forLogMessage("(?s).*(Starting listening for CQL clients|Startup complete).*", 1)
-                            .withStartupTimeout(Duration.ofMinutes(4)));
+                    // Port open is enough here: testUntilReady() retries until CQL and login work.
+                    .waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofMinutes(4)));
             c.start();
             return c;
         });
@@ -109,13 +109,14 @@ class SecureClusterIntegrationTest {
                 null, null, null, null, null);
     }
 
-    /** The default superuser is created a few seconds after CQL starts listening. */
+    /** CQL comes up after the port opens, and the default superuser a few seconds after that. */
     private TestResult testUntilAuthReady(ConnectionConfig cfg, Map<String, String> secrets) throws InterruptedException {
         TestResult r = null;
-        for (int i = 0; i < 30; i++) {
+        long deadline = System.currentTimeMillis() + 180_000;
+        while (System.currentTimeMillis() < deadline) {
             r = engine.sessions.test(cfg, secrets);
-            if (r.ok() || r.error() == null || !r.error().toLowerCase().contains("authentication")) return r;
-            Thread.sleep(2_000);
+            if (r.ok()) return r;
+            Thread.sleep(3_000);
         }
         return r;
     }
@@ -132,6 +133,7 @@ class SecureClusterIntegrationTest {
         assertThat(wrongPassword.ok()).isFalse();
         assertThat(wrongPassword.error()).containsIgnoringCase("auth");
 
+        assertThat(testUntilAuthReady(cfg, Map.of("password", "cassandra")).ok()).isTrue();
         TestResult plaintextToTlsPort = engine.sessions.test(config(version, false), Map.of("password", "cassandra"));
         assertThat(plaintextToTlsPort.ok()).isFalse();
     }

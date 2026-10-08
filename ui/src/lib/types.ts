@@ -281,6 +281,7 @@ export interface RolesView {
   rolesError?: string;
   permissions: Permission[];
   permissionsError?: string;
+  warnings: string[];
 }
 
 export interface EngineInfo {
@@ -299,4 +300,12 @@ export interface ConfirmDetails {
   warnings: string[];
   destructive: boolean;
   requireTypedName: boolean;
+}
+
+export interface SavedScript {
+  id: string;
+  folder: string;
+  name: string;
+  content?: string;
+  updatedAt: string;
 }

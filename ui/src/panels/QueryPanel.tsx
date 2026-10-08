@@ -7,10 +7,13 @@ import { CqlEditor, type CqlEditorHandle } from "../components/CqlEditor";
 import { ResultGrid, gridValue, toGridRows, type GridRow } from "../components/ResultGrid";
 import { CONSISTENCY_LEVELS } from "../components/ConnectionDialog";
 import { errorText, useGuarded, useToast } from "../components/feedback";
+import { SaveScriptDialog, ScriptLibrary } from "../components/ScriptLibrary";
 
 interface EditorTab {
   id: number;
   title: string;
+  scriptId?: string;
+  folder?: string;
   text: string;
   results: StatementResult[];
   active: number;
@@ -42,6 +45,8 @@ export function QueryPanel(props: {
   const [schema, setSchema] = useState<Schema>({});
   const editor = useRef<CqlEditorHandle | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const [library, setLibrary] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const tab = tabs.find((t) => t.id === activeTab) ?? tabs[0];
   const update = useCallback((id: number, patch: Partial<EditorTab>) =>
@@ -169,12 +174,38 @@ export function QueryPanel(props: {
             <input type="checkbox" checked={stopOnError} onChange={(e) => setStopOnError(e.target.checked)} /> Stop on error
           </label>
           <span className="spacer" />
+          <button className="btn small" onClick={() => setLibrary(true)}>Scripts…</button>
+          <button className="btn small" onClick={() => setSaving(true)}>Save to library</button>
           <button className="btn small" onClick={() => fileInput.current?.click()}>Open .cql</button>
           <button className="btn small" onClick={saveFile}>Save .cql</button>
           <input ref={fileInput} type="file" accept=".cql,.txt,.sql" hidden
             onChange={(e) => e.target.files?.[0] && openFile(e.target.files[0])} />
         </div>
       </div>
+      {library && (
+        <ScriptLibrary onClose={() => setLibrary(false)} onOpen={(sc) => {
+          const t = { ...newTab(sc.content ?? ""), title: sc.name, scriptId: sc.id, folder: sc.folder };
+          setTabs((ts) => [...ts, t]);
+          setActiveTab(t.id);
+          setLibrary(false);
+        }} />
+      )}
+      {saving && (
+        <SaveScriptDialog
+          initial={{ name: tab.scriptId ? tab.title : "", folder: tab.folder ?? "" }}
+          onClose={() => setSaving(false)}
+          onSave={async (name, folder) => {
+            try {
+              const saved = await api.saveScript({ id: tab.scriptId, name, folder, content: tab.text });
+              update(tab.id, { scriptId: saved.id, title: saved.name, folder: saved.folder });
+              toast.ok(`Saved "${saved.name}"`);
+              setSaving(false);
+            } catch (e) {
+              toast.error(e);
+            }
+          }}
+        />
+      )}
       <div className="editor" key={tab.id}>
         <CqlEditor
           value={tab.text}

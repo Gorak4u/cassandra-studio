@@ -11,6 +11,7 @@ import com.cassandrastudio.engine.schema.SchemaService;
 import com.cassandrastudio.engine.secrets.SecretStore;
 import com.cassandrastudio.engine.security.RoleService;
 import com.cassandrastudio.engine.store.Database;
+import com.cassandrastudio.engine.store.ScriptRepository;
 
 /** All engine services, wired once. The HTTP layer and tests both use this. */
 public final class Engine implements AutoCloseable {
@@ -25,6 +26,7 @@ public final class Engine implements AutoCloseable {
     public final SchemaService schema;
     public final RoleService roles;
     public final RowEditService rowEdits;
+    public final ScriptRepository scripts;
 
     public Engine(Database db, SecretStore secrets, String actor) {
         this.db = db;
@@ -38,6 +40,7 @@ public final class Engine implements AutoCloseable {
         this.schema = new SchemaService(sessions);
         this.roles = new RoleService(sessions);
         this.rowEdits = new RowEditService(sessions);
+        this.scripts = new ScriptRepository(db);
     }
 
     @Override

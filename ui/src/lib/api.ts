@@ -10,6 +10,7 @@ import type {
   Permission,
   QueryRequest,
   RolesView,
+  SavedScript,
   SchemaTree,
   ScriptResult,
   SecretName,
@@ -130,6 +131,14 @@ export const api = {
   rolePermissions: (id: string, role: string) =>
     request<Permission[]>("GET", `/api/clusters/${enc(id)}/roles/${enc(role)}/permissions`),
   rolesCql: (op: string, body: unknown) => request<{ cql: string }>("POST", `/api/roles-cql/${enc(op)}`, body),
+
+  scripts: () => request<SavedScript[]>("GET", "/api/scripts"),
+  script: (id: string) => request<SavedScript>("GET", `/api/scripts/${enc(id)}`),
+  saveScript: (s: { id?: string | null; folder: string; name: string; content: string }) =>
+    s.id
+      ? request<SavedScript>("PUT", `/api/scripts/${enc(s.id)}`, s)
+      : request<SavedScript>("POST", "/api/scripts", s),
+  deleteScript: (id: string) => request<void>("DELETE", `/api/scripts/${enc(id)}`),
 
   audit: (params: { connectionId?: string; q?: string; limit?: number } = {}) =>
     request<AuditEntry[]>(
