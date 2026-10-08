@@ -1,9 +1,9 @@
 import Editor, { type OnMount } from "@monaco-editor/react";
 import { useEffect, useRef } from "react";
-import { clearEditorContext, monaco, registerCql, setEditorContext } from "../lib/monaco";
+import { clearEditorContext, registerCql, setEditorContext } from "../lib/monaco";
+import type * as Monaco from "monaco-editor";
 import { statementAt, type Schema } from "../lib/cqlText";
 
-registerCql();
 
 export interface CqlEditorHandle {
   /** Selection if any, else the statement under the cursor. */
@@ -22,7 +22,7 @@ export function CqlEditor(props: {
   onRunAll: () => void;
   handleRef: React.MutableRefObject<CqlEditorHandle | null>;
 }) {
-  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const runCurrent = useRef(props.onRunCurrent);
   const runAll = useRef(props.onRunAll);
   runCurrent.current = props.onRunCurrent;
@@ -45,7 +45,7 @@ export function CqlEditor(props: {
     if (uri) clearEditorContext(uri);
   }, []);
 
-  const onMount: OnMount = (ed) => {
+  const onMount: OnMount = (ed, monaco) => {
     editorRef.current = ed;
     const model = ed.getModel()!;
     setEditorContext(model.uri.toString(), {
@@ -74,6 +74,7 @@ export function CqlEditor(props: {
       theme={props.dark ? "vs-dark" : "vs"}
       value={props.value}
       onChange={(v) => props.onChange(v ?? "")}
+      beforeMount={registerCql}
       onMount={onMount}
       options={{
         minimap: { enabled: false },

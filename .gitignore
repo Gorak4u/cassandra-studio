@@ -12,3 +12,6 @@ node_modules/
 .vscode/
 *.iml
 .DS_Store
+*.tsbuildinfo
+desktop/resources/
+ui/public/monaco/

@@ -172,6 +172,10 @@ public final class SessionManager implements AutoCloseable {
                 .withStringList(DefaultDriverOption.METADATA_SCHEMA_REFRESHED_KEYSPACES, List.of())
                 .withInt(DefaultDriverOption.CONNECTION_POOL_LOCAL_SIZE, 1)
                 .withInt(DefaultDriverOption.CONNECTION_POOL_REMOTE_SIZE, 1)
+                // Keep a pool to every node in every DC so any node can be pinned as coordinator
+                // (CQL-3). LOCAL_* consistency levels still never fail over to a remote DC.
+                .withInt(DefaultDriverOption.LOAD_BALANCING_DC_FAILOVER_MAX_NODES_PER_REMOTE_DC, 10_000)
+                .withBoolean(DefaultDriverOption.LOAD_BALANCING_DC_FAILOVER_ALLOW_FOR_LOCAL_CONSISTENCY_LEVELS, false)
                 .withString(DefaultDriverOption.SESSION_NAME, "studio-" + cfg.name());
         if (!"auto".equalsIgnoreCase(cfg.protocolVersion())) {
             conf.withString(DefaultDriverOption.PROTOCOL_VERSION, cfg.protocolVersion().toUpperCase());

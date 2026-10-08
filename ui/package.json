@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "node scripts/copy-monaco.mjs && vite",
+    "build": "node scripts/copy-monaco.mjs && tsc -b && vite build",
     "typecheck": "tsc -b --pretty",
     "test": "vitest run",
     "e2e": "playwright test"
@@ -29,5 +29,8 @@
     "typescript": "5.9.3",
     "vite": "6.4.4",
     "vitest": "3.2.7"
+  },
+  "overrides": {
+    "rollup": "4.52.5"
   }
 }

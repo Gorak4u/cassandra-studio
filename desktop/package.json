@@ -1,0 +1,34 @@
+{
+  "name": "cassandra-studio",
+  "productName": "Cassandra Studio",
+  "version": "0.1.0",
+  "description": "Manage, monitor and query Apache Cassandra clusters",
+  "author": "Cassandra Studio",
+  "license": "UNLICENSED",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --publish never"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "26.0.20"
+  },
+  "build": {
+    "appId": "com.cassandrastudio.desktop",
+    "productName": "Cassandra Studio",
+    "artifactName": "CassandraStudio-${version}-${os}-${arch}.${ext}",
+    "files": ["main.js", "preload.js", "package.json"],
+    "extraResources": [
+      { "from": "resources/engine", "to": "engine" },
+      { "from": "resources/runtime", "to": "runtime" },
+      { "from": "resources/ui", "to": "ui" }
+    ],
+    "directories": { "output": "dist", "buildResources": "build" },
+    "linux": { "target": ["AppImage", "deb", "rpm"], "category": "Development" },
+    "deb": { "depends": [] },
+    "win": { "target": ["nsis"] },
+    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true },
+    "mac": { "target": ["dmg"], "category": "public.app-category.developer-tools", "hardenedRuntime": true }
+  }
+}

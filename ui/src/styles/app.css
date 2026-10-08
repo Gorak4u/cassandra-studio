@@ -163,3 +163,6 @@ table.data tr:hover td { background: var(--panel-2); }
 
 .empty { padding: 40px; text-align: center; color: var(--muted); }
 .ddl { background: var(--panel-2); padding: 10px; border-radius: var(--radius); max-height: 420px; overflow: auto; }
+/* Tree actions appear on hover/focus so names get the full width. */
+.tree-item > .row { display: none; }
+.tree-item:hover > .row, .tree-item:focus-within > .row { display: flex; }

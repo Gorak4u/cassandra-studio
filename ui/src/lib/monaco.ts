@@ -1,17 +1,14 @@
-// Bundle Monaco locally (no CDN: Studio must work offline and on air-gapped sites, NFR-NET)
-// and register the CQL language once.
-import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
-import "monaco-editor/esm/vs/editor/edcore.main";
-import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+// Monaco is loaded from its prebuilt files, copied into public/monaco by
+// scripts/copy-monaco.mjs, and served by the engine from the same origin. No CDN is used, so
+// Studio works offline and on air-gapped sites (NFR-NET). Bundling Monaco's
+// ESM sources instead made the production build run out of memory.
 import { loader } from "@monaco-editor/react";
+import type * as Monaco from "monaco-editor";
 import { CQL_FUNCTIONS, CQL_KEYWORDS, CQL_TYPES, suggest, type Schema } from "./cqlText";
 
-(self as unknown as { MonacoEnvironment: unknown }).MonacoEnvironment = {
-  getWorker: () => new EditorWorker(),
-};
-loader.config({ monaco });
+loader.config({ paths: { vs: new URL("./monaco/vs", document.baseURI).href } });
 
-export { monaco };
+export type MonacoApi = typeof Monaco;
 
 /** Per-editor context the completion provider reads (schema and current keyspace). */
 const contexts = new Map<string, { schema: Schema; keyspace: string | null; statementAt: (offset: number) => string }>();
@@ -29,7 +26,7 @@ export function clearEditorContext(modelUri: string) {
 
 let registered = false;
 
-export function registerCql() {
+export function registerCql(monaco: MonacoApi) {
   if (registered) return;
   registered = true;
   monaco.languages.register({ id: "cql" });
