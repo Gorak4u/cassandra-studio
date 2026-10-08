@@ -50,6 +50,8 @@ public final class CellCodec {
     /** The CQL literal for something the user typed into a grid cell. */
     public static String toLiteral(DataType type, String display, CodecRegistry registry) {
         if (display == null) return "null";
+        // Text is shown raw, so whatever the user typed is the value itself, apostrophes included.
+        if (TEXT.contains(type)) return registry.codecFor(type).format(display);
         String d = display;
         if (UNQUOTED_DISPLAY.contains(type) && !(d.startsWith("'") && d.endsWith("'") && d.length() >= 2)) {
             d = "'" + d.replace("'", "''") + "'";

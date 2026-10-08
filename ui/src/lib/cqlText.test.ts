@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { statementAt, statementSpans, suggest, tablesIn } from "./cqlText";
+import { cqlId, statementAt, statementSpans, suggest, tablesIn } from "./cqlText";
 
 describe("statementSpans", () => {
   it("splits like the engine", () => {
@@ -41,5 +41,14 @@ describe("suggest", () => {
   it("finds tables in statements", () => {
     expect(tablesIn('UPDATE "Shop".t SET a = 1', null)).toEqual([["Shop", "t"]]);
     expect(tablesIn("INSERT INTO t (k) VALUES (1)", "ks")).toEqual([["ks", "t"]]);
+  });
+});
+
+describe("cqlId", () => {
+  it("quotes only when needed", () => {
+    expect(cqlId("orders")).toBe("orders");
+    expect(cqlId("MyTable")).toBe('"MyTable"');
+    expect(cqlId("table")).toBe('"table"');
+    expect(cqlId('we"ird')).toBe('"we""ird"');
   });
 });

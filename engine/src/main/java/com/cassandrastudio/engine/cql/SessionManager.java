@@ -50,6 +50,7 @@ public final class SessionManager implements AutoCloseable {
 
     private final ConnectionRepository connections;
     private final Map<String, CqlSession> sessions = new ConcurrentHashMap<>();
+    /** Per connection, keyspace sessions in access order (LRU). Guarded by {@code this}. */
     private final Map<String, Map<String, CqlSession>> keyspaceSessions = new ConcurrentHashMap<>();
 
     public SessionManager(ConnectionRepository connections) {
@@ -80,19 +81,29 @@ public final class SessionManager implements AutoCloseable {
         CqlSession base = session(connectionId);
         if (keyspace == null || keyspace.isBlank()) return new SessionAndKeyspace(base, null);
         if (supportsPerRequestKeyspace(base)) return new SessionAndKeyspace(base, keyspace);
-        Map<String, CqlSession> byKs = keyspaceSessions.computeIfAbsent(connectionId, k -> new ConcurrentHashMap<>());
-        CqlSession ks = byKs.get(keyspace);
+        Map<String, CqlSession> existing = keyspaceSessions.get(connectionId);
+        CqlSession ks = existing == null ? null : existing.get(keyspace);
         if (ks != null && !ks.isClosed()) return new SessionAndKeyspace(ks, null);
         synchronized (this) {
+            // Re-read under the lock: disconnect() may have removed the map meanwhile.
+            Map<String, CqlSession> byKs = keyspaceSessions.computeIfAbsent(connectionId, k -> new java.util.LinkedHashMap<>(16, 0.75f, true));
+            ks = byKs.get(keyspace);
+            if (ks != null && !ks.isClosed()) return new SessionAndKeyspace(ks, null);
             if (byKs.size() >= MAX_KEYSPACE_SESSIONS) {
-                byKs.values().forEach(CqlSession::closeAsync);
-                byKs.clear();
+                // Evict only the least recently used one, and close it later so queries still running on it finish.
+                var eldest = byKs.entrySet().iterator().next();
+                byKs.remove(eldest.getKey());
+                closeLater(eldest.getValue());
             }
             ConnectionConfig cfg = connections.get(connectionId);
             ks = open(cfg, secretsOf(cfg), keyspace);
             byKs.put(keyspace, ks);
             return new SessionAndKeyspace(ks, null);
         }
+    }
+
+    private static void closeLater(CqlSession s) {
+        java.util.concurrent.CompletableFuture.delayedExecutor(2, java.util.concurrent.TimeUnit.MINUTES).execute(s::closeAsync);
     }
 
     public record SessionAndKeyspace(CqlSession session, String perRequestKeyspace) {}
@@ -102,7 +113,7 @@ public final class SessionManager implements AutoCloseable {
         return ctx.getProtocolVersionRegistry().supports(ctx.getProtocolVersion(), DefaultProtocolFeature.PER_REQUEST_KEYSPACE);
     }
 
-    public void disconnect(String connectionId) {
+    public synchronized void disconnect(String connectionId) {
         CqlSession s = sessions.remove(connectionId);
         if (s != null) s.closeAsync();
         Map<String, CqlSession> byKs = keyspaceSessions.remove(connectionId);

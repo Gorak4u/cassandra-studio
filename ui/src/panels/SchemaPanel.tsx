@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { ConnectionConfig, KeyspaceDetails, SchemaTree, TableDetails } from "../lib/types";
 import { useGuarded, useToast } from "../components/feedback";
+import { cqlId } from "../lib/cqlText";
 import { Modal } from "../components/Modal";
 
 type Sel = { kind: "keyspace"; ks: string } | { kind: "table"; ks: string; table: string } | null;
@@ -73,7 +74,7 @@ export function SchemaPanel(props: { conn: ConnectionConfig; onOpenInEditor: (te
                     <div key={t.name} style={{ paddingLeft: 22 }}
                       className={"tree-item" + (sel?.kind === "table" && sel.ks === k.name && sel.table === t.name ? " selected" : "")}
                       onClick={() => setSel({ kind: "table", ks: k.name, table: t.name })}
-                      onDoubleClick={() => props.onOpenInEditor(`SELECT * FROM ${k.name}.${t.name} LIMIT 100;`)}>
+                      onDoubleClick={() => props.onOpenInEditor(`SELECT * FROM ${cqlId(k.name)}.${cqlId(t.name)} LIMIT 100;`)}>
                       <span className="name">▦ {t.name}</span>
                     </div>
                   ))}
@@ -128,7 +129,7 @@ export function SchemaPanel(props: { conn: ConnectionConfig; onOpenInEditor: (te
             <div className="row">
               <h3 style={{ margin: 0 }}>Table {tDetails.keyspace}.{tDetails.name}</h3>
               <span className="spacer" />
-              <button className="btn small" onClick={() => props.onOpenInEditor(`SELECT * FROM ${tDetails.keyspace}.${tDetails.name} LIMIT 100;`)}>Query</button>
+              <button className="btn small" onClick={() => props.onOpenInEditor(`SELECT * FROM ${cqlId(tDetails.keyspace)}.${cqlId(tDetails.name)} LIMIT 100;`)}>Query</button>
               {!tDetails.virtual && !tDetails.keyspace.startsWith("system") && (
                 <>
                   <button className="btn small danger" onClick={() => runDdl("truncate", { keyspace: tDetails.keyspace, table: tDetails.name })}>Truncate</button>

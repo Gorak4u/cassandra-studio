@@ -60,11 +60,13 @@ export function ConnectionTree(props: {
     onDragOver: (e: React.DragEvent) => {
       if (e.dataTransfer.types.includes("application/x-studio-connection")) {
         e.preventDefault();
+        e.stopPropagation(); // the root list is an ancestor drop target too
         setDragOver(folderId ?? "root");
       }
     },
     onDragLeave: () => setDragOver(null),
     onDrop: (e: React.DragEvent) => {
+      e.stopPropagation(); // otherwise the root's handler also runs and moves it back out
       const id = e.dataTransfer.getData("application/x-studio-connection");
       setDragOver(null);
       const c = props.connections.find((x) => x.id === id);

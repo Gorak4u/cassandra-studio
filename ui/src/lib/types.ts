@@ -164,6 +164,9 @@ export interface StatementResult {
   trace?: Trace;
   settings?: Record<string, string>;
   message?: string;
+  /** Keyspace and consistency the statement ran with (for "next page"). */
+  keyspace?: string;
+  consistency?: string;
 }
 
 export interface ScriptResult {

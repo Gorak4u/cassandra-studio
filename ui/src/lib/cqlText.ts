@@ -166,3 +166,13 @@ export function tablesIn(statement: string, keyspace: string | null): [string, s
 function unquote(id: string): string {
   return id.startsWith('"') && id.endsWith('"') ? id.slice(1, -1).replace(/""/g, '"') : id.toLowerCase();
 }
+
+const RESERVED = new Set(("add allow alter and apply asc authorize batch begin by columnfamily create delete desc describe drop " +
+  "entries execute from full grant if in index infinity insert into is keyspace limit materialized mbean mbeans modify nan " +
+  "norecursive not null of on or order primary rename replace revoke schema select set table to token truncate unlogged " +
+  "unset update use using view where with").split(" "));
+
+/** A CQL identifier for an internal (case-sensitive) name: quoted when needed, like the driver's asCql(true). */
+export function cqlId(name: string): string {
+  return /^[a-z][a-z0-9_]*$/.test(name) && !RESERVED.has(name) ? name : '"' + name.replace(/"/g, '""') + '"';
+}

@@ -69,7 +69,14 @@ public final class QueryService {
                                   List<Column> columns, List<List<Object>> rows, int rowCount, boolean hasMore,
                                   String pagingState, List<String> serverWarnings, List<String> clientWarnings,
                                   String coordinator, long durationMs, Trace trace, Map<String, String> settings,
-                                  String message) {}
+                                  String message, String keyspace, String consistency) {
+
+        /** The keyspace and consistency the statement ran with, so "next page" repeats them exactly. */
+        StatementResult in(String ks, String cl) {
+            return new StatementResult(index, line, statement, kind, status, error, columns, rows, rowCount, hasMore,
+                    pagingState, serverWarnings, clientWarnings, coordinator, durationMs, trace, settings, message, ks, cl);
+        }
+    }
 
     public record ScriptResult(List<StatementResult> results, String keyspace, String consistency, boolean tracing) {}
 
@@ -114,6 +121,7 @@ public final class QueryService {
             StatementClassifier.Classification c = StatementClassifier.classify(st.text());
             StatementResult r;
             Matcher m;
+            try {
             if ((m = USE.matcher(st.text())).matches()) {
                 keyspace = unquote(m.group(1));
                 r = setting(i, st, Map.of("keyspace", keyspace), "Now using keyspace " + keyspace);
@@ -137,6 +145,13 @@ public final class QueryService {
             } else {
                 r = run(i, st, c, conn, req, keyspace, consistency, serial, tracing);
             }
+            } catch (ApiException e) {
+                // e.g. unknown consistency level, a pinned node that left, a keyspace session that cannot open:
+                // report it on this statement and keep the results of the ones that already ran.
+                r = new StatementResult(i, st.line(), st.text(), c.kind().name(), "error", e.getMessage(), List.of(),
+                        List.of(), 0, false, null, List.of(), c.warnings(), null, 0, null, null, null, null, null);
+            }
+            r = r.in(keyspace, consistency);
             failed |= r.status().equals("error");
             results.add(r);
         }
@@ -173,7 +188,9 @@ public final class QueryService {
                 columns.add(new Column(cd.getName().asInternal(), cd.getType().asCql(false, true),
                         cd.getKeyspace().asInternal(), cd.getTable().asInternal()));
             }
-            int maxRows = Math.min(req.maxRows() == null ? Integer.MAX_VALUE : Math.max(req.maxRows(), 1), HARD_MAX_ROWS);
+            // "Fetch all" stops at the first page boundary at or past maxRows. Rows are never dropped, so the
+            // paging state always continues exactly after the last returned row.
+            int maxRows = Math.min(req.maxRows() == null ? 0 : Math.max(req.maxRows(), 1), HARD_MAX_ROWS);
             List<List<Object>> rows = new ArrayList<>();
             List<String> serverWarnings = new ArrayList<>(rs.getExecutionInfo().getWarnings());
             AsyncResultSet page = rs;
@@ -185,13 +202,10 @@ public final class QueryService {
                     }
                     rows.add(cells);
                 }
-                boolean wantMore = req.maxRows() != null && rows.size() < maxRows;
-                if (!page.hasMorePages() || !wantMore) break;
+                if (!page.hasMorePages() || rows.size() >= maxRows) break;
                 page = page.fetchNextPage().toCompletableFuture().get(timeout, TimeUnit.MILLISECONDS);
                 serverWarnings.addAll(page.getExecutionInfo().getWarnings());
             }
-            boolean truncated = rows.size() > maxRows;
-            if (truncated) rows = new ArrayList<>(rows.subList(0, maxRows));
             ExecutionInfo info = page.getExecutionInfo();
             ByteBuffer ps = info.getPagingState();
             Trace trace = tracing ? trace(rs.getExecutionInfo()) : null;
@@ -202,18 +216,16 @@ public final class QueryService {
                 audit.record(conn, coordinator, "cql", c.verb(), Masking.mask(st.text()), AuditLog.Outcome.SUCCESS, null);
             }
             return new StatementResult(index, st.line(), st.text(), c.kind().name(), "ok", null, columns, rows, rows.size(),
-                    page.hasMorePages() || truncated, ps == null ? null : Base64.getEncoder().encodeToString(copy(ps)),
+                    page.hasMorePages(), ps == null ? null : Base64.getEncoder().encodeToString(copy(ps)),
                     serverWarnings, c.warnings(), coordinator, ms, trace, null,
-                    columns.isEmpty() ? "Done" : null);
-        } catch (ApiException e) {
-            throw e;
+                    columns.isEmpty() ? "Done" : null, null, null);
         } catch (Exception e) {
             long ms = (System.nanoTime() - start) / 1_000_000;
-            String err = Errors.describe(e);
+            String err = e instanceof ApiException ? e.getMessage() : Errors.describe(e);
             history(conn, st.text(), keyspace, nodeRef, ms, 0, err);
             if (c.changesSomething()) audit.record(conn, nodeRef, "cql", c.verb(), Masking.mask(st.text()), AuditLog.Outcome.FAILED, err);
             return new StatementResult(index, st.line(), st.text(), c.kind().name(), "error", err, List.of(), List.of(), 0,
-                    false, null, List.of(), c.warnings(), nodeRef, ms, null, null, null);
+                    false, null, List.of(), c.warnings(), nodeRef, ms, null, null, null, null, null);
         }
     }
 
@@ -232,22 +244,22 @@ public final class QueryService {
             rows.add(List.of(text));
             return new StatementResult(index, st.line(), st.text(), "READ", "ok", null,
                     List.of(new Column("describe", "text", null, null)), rows, 1, false, null, List.of(), List.of(),
-                    null, (System.nanoTime() - start) / 1_000_000, null, null, null);
+                    null, (System.nanoTime() - start) / 1_000_000, null, null, null, null, null);
         } catch (ApiException e) {
             return new StatementResult(index, st.line(), st.text(), "READ", "error", e.getMessage(), List.of(), List.of(), 0,
-                    false, null, List.of(), List.of(), null, (System.nanoTime() - start) / 1_000_000, null, null, null);
+                    false, null, List.of(), List.of(), null, (System.nanoTime() - start) / 1_000_000, null, null, null, null, null);
         }
     }
 
     private static StatementResult setting(int index, CqlScript.Statement st, Map<String, String> settings, String message) {
         return new StatementResult(index, st.line(), st.text(), "CLIENT", "ok", null, List.of(), List.of(), 0, false, null,
-                List.of(), List.of(), null, 0, null, settings, message);
+                List.of(), List.of(), null, 0, null, settings, message, null, null);
     }
 
     private static StatementResult skipped(int index, CqlScript.Statement st) {
         return new StatementResult(index, st.line(), st.text(), StatementClassifier.classify(st.text()).kind().name(),
                 "skipped", null, List.of(), List.of(), 0, false, null, List.of(), List.of(), null, 0, null, null,
-                "Skipped: an earlier statement failed");
+                "Skipped: an earlier statement failed", null, null);
     }
 
     private static Trace trace(ExecutionInfo info) {

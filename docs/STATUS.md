@@ -28,12 +28,13 @@ Updated: 2026-10-08. Requirement IDs refer to [`requirement.txt`](../requirement
 
 | Check | Result |
 |---|---|
-| Engine unit tests | 68 passing |
-| UI unit tests | 9 passing |
+| Engine unit tests | 70 passing |
+| UI unit tests | 10 passing |
 | Integration tests on real Cassandra 3.11 / 4.1 / 5.0 | Plain CQL: 6 per version. TLS + PasswordAuthenticator + CassandraAuthorizer: 2 per version. All passing on all three |
 | OS keychain | CI on Windows and macOS runners |
 | Packaged app | CI starts the bundled engine from each OS's installer build |
-| Security | CodeQL (Java, TypeScript), Trivy (npm and Java dependencies), npm audit, SBOM |
+| Security | CodeQL (Java, TypeScript), Trivy (npm and Java dependencies), npm audit, SBOM. Trivy found 8 HIGH/CRITICAL CVEs in Netty and Jetty: fixed (Netty 4.1.139, Javalin 7 on Jetty 12); now 0 |
+| Code review | Independent review of engine, UI and desktop: 10 findings (data correctness, concurrency, desktop navigation hardening, performance), all fixed with regression tests |
 | Browser test (test-env: 2-DC 4.1, 3.11, 5.0 TLS + login) | Passing: overview, PROD confirm, remote-DC pinning, grid edit verified in Cassandra, create-table form, roles on multi-DC, create/grant/drop role over TLS + login, 3.11 |
 | Accessibility | axe-core WCAG 2.1 A/AA on every main screen: no violations (fails CI on serious/critical) |
 | Desktop window | Electron launched under a display: UI renders, startup to usable UI ~2 s (target 5 s), engine stops on close |

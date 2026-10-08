@@ -132,6 +132,23 @@ class CqlIntegrationTest {
         assertThat(fetched.rows()).hasSize(5);
         assertThat(fetched.coordinator()).isEqualTo(sel.coordinator());
 
+        // Review finding: "fetch all" past maxRows must not drop rows. maxRows 3 with page size 2 stops at the page
+        // boundary (4 rows) and the paging state continues with row 5.
+        StatementResult capped = engine.queries.execute(id, new QueryRequest("SELECT ts FROM " + ks + ".events WHERE tenant = 'a'",
+                null, null, null, null, 2, null, false, null, true, 3, false, null)).results().get(0);
+        assertThat(capped.rows()).extracting(row -> row.get(0)).containsExactly(1, 2, 3, 4);
+        StatementResult rest = engine.queries.execute(id, new QueryRequest("SELECT ts FROM " + ks + ".events WHERE tenant = 'a'",
+                null, null, null, null, 2, capped.pagingState(), false, null, true, null, false, null)).results().get(0);
+        assertThat(rest.rows()).extracting(row -> row.get(0)).containsExactly(5);
+        assertThat(capped.keyspace()).isNull();
+        assertThat(capped.consistency()).isEqualTo("ONE");
+
+        // Review finding: an engine-side error mid-script is reported on that statement; the others still run.
+        ScriptResult mixed = engine.queries.execute(id, new QueryRequest("SELECT ts FROM " + ks + ".events WHERE tenant = 'a';"
+                + "CONSISTENCY NOPE; SELECT ts FROM " + ks + ".events WHERE tenant = 'a'", null, null, null, null, null, null,
+                false, null, false, null, false, null));
+        assertThat(mixed.results()).extracting(StatementResult::status).containsExactly("ok", "error", "ok");
+
         // Stop on error: the third statement is skipped.
         ScriptResult failing = engine.queries.execute(id, q("SELECT * FROM " + ks + ".events WHERE tenant = 'a';"
                 + "SELECT * FROM " + ks + ".no_such_table;SELECT * FROM " + ks + ".events WHERE tenant = 'a'", false));

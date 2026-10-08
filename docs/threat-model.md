@@ -22,8 +22,9 @@ Cluster credentials (CQL, JMX, SSH); the clusters' data and schema; the audit lo
 | Man-in-the-middle on CQL | 2 | TLS with JKS/PKCS12/PEM truststores, mTLS, optional hostname verification | Done, tested on 3.11/4.1/5.0 |
 | Accidental or malicious destructive change | engine | ActionGuard: read-only, confirm, typed name on PROD; audit of blocked attempts | Done, tested |
 | CQL/DDL injection through forms | engine | Identifiers quoted by the driver; types/options reject `;` and comments; grid values parsed by the column codec | Done, tested |
-| Renderer compromise reaches the OS | 4 | contextIsolation, sandbox, no nodeIntegration, navigation locked to the engine origin, no webviews, CSP | Done |
+| Renderer compromise reaches the OS | 4 | contextIsolation, sandbox, no nodeIntegration, navigation locked to the engine's exact origin (parsed, not prefix-matched), only http(s) handed to the OS browser, no webviews, CSP | Done (hardened after code review) |
 | Tampered installer | supply chain | Checksums published; code signing when certificates exist; SBOM; dependency scanning; CodeQL | Signing pending certificates |
+| Known-vulnerable dependency | supply chain | Trivy on every push fails the build on HIGH/CRITICAL with a fix; first scan found 8 (Netty, end-of-life Jetty 11), all fixed | Done |
 | Denial of service on a cluster from Studio | 2 | Page size limits, 100k row cap per statement, full-scan warnings | Done. Rate limits come with bulk tools (Phase 3). |
 
 ## Open items

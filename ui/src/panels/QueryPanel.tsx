@@ -18,11 +18,15 @@ interface EditorTab {
   results: StatementResult[];
   active: number;
   running: boolean;
+  /** Increments on every run, so results views never reuse state from an earlier run. */
+  runSeq: number;
+  /** The request the current results came from (node, page size, timeout) for "next page". */
+  runRequest?: QueryRequest;
 }
 
 let nextTab = 1;
 const newTab = (text = ""): EditorTab => ({
-  id: nextTab++, title: `Query ${nextTab - 1}`, text, results: [], active: 0, running: false,
+  id: nextTab++, title: `Query ${nextTab - 1}`, text, results: [], active: 0, running: false, runSeq: 0,
 });
 
 /** Multi-tab CQL editor with results (CQL-1 ... CQL-10). */
@@ -81,9 +85,13 @@ export function QueryPanel(props: {
     const id = tab.id;
     update(id, { running: true });
     try {
-      const res = await guarded((c) => api.query(props.conn.id!, request(cql, c)));
+      const base = request(cql);
+      const res = await guarded((c) => api.query(props.conn.id!, { ...base, ...c }));
       if (!res) return;
-      update(id, { results: res.results, active: Math.max(0, res.results.findIndex((r) => r.status === "error")) });
+      setTabs((ts) => ts.map((t) => (t.id === id ? {
+        ...t, results: res.results, runRequest: base, runSeq: t.runSeq + 1,
+        active: Math.max(0, res.results.findIndex((r) => r.status === "error")),
+      } : t)));
       if (res.keyspace !== undefined) setKeyspace(res.keyspace ?? null);
       if (res.consistency) setConsistency(res.consistency);
       setTracing(res.tracing);
@@ -232,10 +240,10 @@ export function QueryPanel(props: {
         )}
         {result ? (
           <ResultView
-            key={`${tab.id}-${tab.active}-${result.statement}-${result.durationMs}`}
+            key={`${tab.id}-${tab.runSeq}-${tab.active}`}
             conn={props.conn}
             result={result}
-            request={request}
+            runRequest={tab.runRequest ?? request(result.statement)}
             dark={props.dark}
             onRerun={() => run(result.statement)}
           />
@@ -252,7 +260,7 @@ type View = "grid" | "messages" | "trace";
 function ResultView(props: {
   conn: ConnectionConfig;
   result: StatementResult;
-  request: (cql: string, extra?: Partial<QueryRequest>) => QueryRequest;
+  runRequest: QueryRequest;
   dark: boolean;
   onRerun: () => void;
 }) {
@@ -305,9 +313,11 @@ function ResultView(props: {
   const loadMore = async (all: boolean) => {
     setLoading(true);
     try {
-      const res = await api.query(props.conn.id!, props.request(r.statement, {
-        pagingState, maxRows: all ? 10000 : null, tracing: false,
-      }));
+      // Same keyspace, consistency, node and page size as the original run, whatever the toolbar shows now.
+      const res = await api.query(props.conn.id!, {
+        ...props.runRequest, cql: r.statement, keyspace: r.keyspace ?? null, consistency: r.consistency ?? props.runRequest.consistency,
+        pagingState, maxRows: all ? 10000 : null, tracing: false, confirmed: false, confirmName: null,
+      });
       const s = res.results[0];
       if (s.status === "error") throw new Error(s.error);
       setRows((old) => [...old, ...toGridRows(s.rows, old.length)]);

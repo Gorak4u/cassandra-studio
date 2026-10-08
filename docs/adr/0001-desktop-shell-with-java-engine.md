@@ -10,6 +10,7 @@ as Studio Server for team and always-on features.
 ## Decision
 - **Engine:** Java 21. The Cassandra Java driver 4.x, JMX and Apache MINA SSHD are all native
   to Java. A jlink'd runtime is bundled, so users install nothing.
+- **HTTP server:** Javalin 7 on Jetty 12 (Javalin 6 used Jetty 11, which is end-of-life with unpatched CVEs).
 - **UI:** React + TypeScript, served by the engine itself, wrapped in Electron.
 - **Between them:** HTTP/JSON on 127.0.0.1 with a per-launch bearer token. The UI's origin is
   the engine, so the same build is the web UI of Studio Server later.

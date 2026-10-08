@@ -22,6 +22,8 @@ public final class ConnectionRepository {
 
     private final Database db;
     private final SecretStore secrets;
+    /** Which secrets each connection has; secrets only change through this class, so the cache stays exact. */
+    private final Map<String, Map<String, Boolean>> secretFlags = new java.util.concurrent.ConcurrentHashMap<>();
 
     public ConnectionRepository(Database db, SecretStore secrets) {
         this.db = db;
@@ -118,6 +120,7 @@ public final class ConnectionRepository {
                     toSave.folderId(), toSave.name(), json, now, toSave.id());
         }
         if (newSecrets != null) {
+            secretFlags.remove(toSave.id());
             newSecrets.forEach((name, value) -> {
                 if (!SecretKeys.ALL.contains(name)) throw ApiException.badRequest("Unknown secret '" + name + "'");
                 if (value == null) return;
@@ -140,6 +143,7 @@ public final class ConnectionRepository {
         get(id);
         db.update("DELETE FROM connections WHERE id=?", id);
         for (String s : SecretKeys.ALL) secrets.delete(SecretKeys.storeKey(id, s));
+        secretFlags.remove(id);
     }
 
     public Optional<String> secret(String connectionId, String name) {
@@ -211,9 +215,11 @@ public final class ConnectionRepository {
     }
 
     private ConnectionConfig withSecretFlags(ConnectionConfig c) {
-        Map<String, Boolean> set = new LinkedHashMap<>();
-        for (String s : SecretKeys.ALL) set.put(s, secrets.get(SecretKeys.storeKey(c.id(), s)).isPresent());
-        return c.withSecretsSet(set);
+        return c.withSecretsSet(secretFlags.computeIfAbsent(c.id(), id -> {
+            Map<String, Boolean> set = new LinkedHashMap<>();
+            for (String s : SecretKeys.ALL) set.put(s, secrets.get(SecretKeys.storeKey(id, s)).isPresent());
+            return java.util.Collections.unmodifiableMap(set);
+        }));
     }
 
     private void validate(ConnectionConfig c) {

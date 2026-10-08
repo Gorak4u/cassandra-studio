@@ -82,15 +82,25 @@ async function createWindow() {
       sandbox: true,
     },
   });
-  // Stay on the engine's origin; anything else opens in the system browser.
+  // Stay on the engine's exact origin. Only http(s) links may leave, and only to the system browser;
+  // other schemes (file:, smb:, custom protocol handlers) are dropped.
+  const sameOrigin = (url) => {
+    try { return new URL(url).origin === origin; } catch { return false; }
+  };
+  const openOutside = (url) => {
+    try {
+      const u = new URL(url);
+      if (u.protocol === "https:" || u.protocol === "http:") shell.openExternal(u.toString());
+    } catch { /* not a URL: ignore */ }
+  };
   win.webContents.on("will-navigate", (e, url) => {
-    if (!url.startsWith(origin)) {
+    if (!sameOrigin(url)) {
       e.preventDefault();
-      shell.openExternal(url);
+      openOutside(url);
     }
   });
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("https://")) shell.openExternal(url);
+    openOutside(url);
     return { action: "deny" };
   });
   win.loadURL(`${origin}/#token=${encodeURIComponent(ready.token)}`);
