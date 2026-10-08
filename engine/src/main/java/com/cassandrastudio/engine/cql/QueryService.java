@@ -170,7 +170,7 @@ public final class QueryService {
 
             List<Column> columns = new ArrayList<>();
             for (ColumnDefinition cd : rs.getColumnDefinitions()) {
-                columns.add(new Column(cd.getName().asCql(true), cd.getType().asCql(false, true),
+                columns.add(new Column(cd.getName().asInternal(), cd.getType().asCql(false, true),
                         cd.getKeyspace().asInternal(), cd.getTable().asInternal()));
             }
             int maxRows = Math.min(req.maxRows() == null ? Integer.MAX_VALUE : Math.max(req.maxRows(), 1), HARD_MAX_ROWS);
