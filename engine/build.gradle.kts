@@ -1,0 +1,75 @@
+plugins {
+    java
+    application
+    id("com.gradleup.shadow") version "8.3.8"
+    id("org.cyclonedx.bom") version "2.3.1"
+}
+
+group = "com.cassandrastudio"
+
+java {
+    toolchain { languageVersion.set(JavaLanguageVersion.of(21)) }
+}
+
+repositories { mavenCentral() }
+
+val driverVersion = "4.19.3"
+val jacksonVersion = "2.22.3"
+
+dependencies {
+    implementation("io.javalin:javalin:6.7.0")
+    implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion")
+    implementation("org.apache.cassandra:java-driver-core:$driverVersion")
+    implementation("org.apache.cassandra:java-driver-query-builder:$driverVersion")
+    implementation("org.apache.sshd:sshd-core:2.20.0")
+    implementation("org.xerial:sqlite-jdbc:3.53.4.0")
+    implementation("com.github.javakeyring:java-keyring:1.0.4")
+    implementation("org.slf4j:slf4j-simple:2.0.20")
+
+    testImplementation(platform("org.junit:junit-bom:5.14.4"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation("org.assertj:assertj-core:3.27.7")
+    testImplementation("org.testcontainers:cassandra:1.21.4")
+    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
+}
+
+application {
+    mainClass.set("com.cassandrastudio.engine.Main")
+    // Same fix the control repo applies to nodetool: newer JDKs reject the
+    // RMI URLs some Cassandra versions advertise.
+    applicationDefaultJvmArgs = listOf("-Dcom.sun.jndi.rmiURLParsing=legacy")
+}
+
+tasks.withType<JavaCompile> {
+    options.encoding = "UTF-8"
+    options.compilerArgs.addAll(listOf("-Xlint:all,-serial,-processing", "-parameters"))
+}
+
+tasks.test {
+    useJUnitPlatform {
+        // Integration tests start real Cassandra containers; run them with -Pintegration.
+        if (!project.hasProperty("integration")) excludeTags("integration")
+    }
+    systemProperty("cassandra.versions", project.findProperty("cassandraVersions") ?: "4.1")
+    maxHeapSize = "1g"
+    testLogging { events("failed"); exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL }
+}
+
+tasks.shadowJar {
+    archiveBaseName.set("cassandra-studio-engine")
+    archiveClassifier.set("all")
+    archiveVersion.set("")
+    mergeServiceFiles()
+    manifest { attributes["Main-Class"] = "com.cassandrastudio.engine.Main" }
+}
+
+val writeVersion by tasks.registering {
+    val out = layout.buildDirectory.dir("generated/version")
+    val v = project.version.toString()
+    inputs.property("version", v)
+    outputs.dir(out)
+    doLast { out.get().file("studio-version.txt").asFile.apply { parentFile.mkdirs(); writeText(v) } }
+}
+sourceSets.main { resources.srcDir(writeVersion) }

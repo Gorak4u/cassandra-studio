@@ -1,0 +1,14 @@
+# build output
+build/
+.gradle/
+out/
+dist/
+node_modules/
+*.log
+# local runtime data
+.studio-data/
+# IDE
+.idea/
+.vscode/
+*.iml
+.DS_Store
