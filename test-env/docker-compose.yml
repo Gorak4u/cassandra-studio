@@ -11,7 +11,8 @@ x-cassandra: &cassandra
     HEAP_NEWSIZE: 100M
     CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
   healthcheck:
-    test: ["CMD-SHELL", "nodetool statusbinary | grep -q running"]
+    # Exact match: nodetool's own error text ("...Is it running?") must not count as healthy.
+    test: ["CMD-SHELL", "nodetool statusbinary 2>/dev/null | grep -qx running"]
     interval: 10s
     timeout: 10s
     retries: 40

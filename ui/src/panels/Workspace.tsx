@@ -26,6 +26,15 @@ export function Workspace(props: { conn: ConnectionConfig; dark: boolean; onConn
   }, [props.conn.id, onConnected]);
   useEffect(connect, [connect]);
 
+  // Keep topology current: nodes that join, leave or go down after connecting show up without a manual refresh.
+  useEffect(() => {
+    if (!info) return;
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") api.clusterInfo(props.conn.id!).then(setInfo).catch(() => undefined);
+    }, 15000);
+    return () => clearInterval(t);
+  }, [info !== null, props.conn.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const openInEditor = (text: string) => {
     setOpenText((o) => ({ text, seq: (o?.seq ?? 0) + 1 }));
     setTab("query");

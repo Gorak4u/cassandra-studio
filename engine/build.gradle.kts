@@ -17,7 +17,10 @@ val driverVersion = "4.19.3"
 val jacksonVersion = "2.22.3"
 
 dependencies {
-    implementation("io.javalin:javalin:6.7.0")
+    // Security floor for transitive Netty (from the Cassandra driver): 4.1.130 has known CVEs
+    // (incl. CVE-2026-75595, critical). Patch-level upgrade within the 4.1 line the driver uses.
+    implementation(platform("io.netty:netty-bom:4.1.139.Final"))
+    implementation("io.javalin:javalin:7.2.3")
     implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion")
     implementation("org.apache.cassandra:java-driver-core:$driverVersion")

@@ -12,6 +12,7 @@ import com.cassandrastudio.engine.util.ApiException;
 import com.cassandrastudio.engine.util.Json;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.javalin.Javalin;
+import io.javalin.config.RoutesConfig;
 import io.javalin.http.Context;
 import io.javalin.http.staticfiles.Location;
 import io.javalin.json.JavalinJackson;
@@ -44,7 +45,8 @@ public final class EngineServer implements AutoCloseable {
         this.token = options.token();
         this.bindHost = options.host();
         this.app = Javalin.create(cfg -> {
-            cfg.showJavalinBanner = false;
+            cfg.startup.showJavalinBanner = false;
+            cfg.startup.showOldJavalinVersionWarning = false;
             cfg.jsonMapper(new JavalinJackson(Json.MAPPER, false));
             cfg.http.maxRequestSize = 64L * 1024 * 1024;
             if (options.uiDir() != null && Files.isDirectory(options.uiDir())) {
@@ -60,10 +62,10 @@ public final class EngineServer implements AutoCloseable {
                     rule.allowHost("http://localhost:5173", "http://127.0.0.1:5173");
                 }));
             }
+            security(cfg.routes);
+            errors(cfg.routes);
+            routes(cfg.routes);
         });
-        security();
-        errors();
-        routes();
         app.start(options.host(), options.port());
     }
 
@@ -73,7 +75,7 @@ public final class EngineServer implements AutoCloseable {
 
     // ---- security ----------------------------------------------------------
 
-    private void security() {
+    private void security(RoutesConfig app) {
         app.before("/api/*", ctx -> {
             if (ctx.method().name().equals("OPTIONS")) return;
             if (isLoopback(bindHost)) {
@@ -101,7 +103,7 @@ public final class EngineServer implements AutoCloseable {
         return host.equals("127.0.0.1") || host.equals("localhost") || host.equals("::1");
     }
 
-    private void errors() {
+    private void errors(RoutesConfig app) {
         app.exception(ApiException.class, (e, ctx) -> error(ctx, e.status(), e.code(), e.getMessage(), e.details()));
         app.exception(IllegalArgumentException.class, (e, ctx) -> error(ctx, 400, "bad_request", e.getMessage(), Map.of()));
         app.exception(Exception.class, (e, ctx) -> {
@@ -120,7 +122,7 @@ public final class EngineServer implements AutoCloseable {
 
     // ---- routes --------------------------------------------------------------
 
-    private void routes() {
+    private void routes(RoutesConfig app) {
         app.get("/api/info", ctx -> ctx.json(Map.of(
                 "version", Version.VERSION,
                 "secretStore", engine.connections.secretStoreDescription(),

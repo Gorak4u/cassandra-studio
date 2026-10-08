@@ -148,19 +148,14 @@ jobs:
       - name: Build engine jar
         working-directory: engine
         run: ./gradlew --no-daemon -q shadowJar
-      - name: Scan npm lockfiles
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
+      # Trivy from its pinned image (the trivy-action tags were withdrawn upstream).
+      - name: Scan npm lockfiles (UI and desktop)
+        run: |
+          for lock in ui/package-lock.json desktop/package-lock.json; do
+            docker run --rm -v "$PWD":/src -v "$HOME/.cache/trivy":/root/.cache/trivy aquasec/trivy:0.58.1 \
+              fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "/src/$lock"
+          done
       - name: Scan engine jar (Java dependencies)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: rootfs
-          scan-ref: engine/build/libs
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
+        run: |
+          docker run --rm -v "$PWD":/src -v "$HOME/.cache/trivy":/root/.cache/trivy aquasec/trivy:0.58.1 \
+            rootfs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 /src/engine/build/libs
