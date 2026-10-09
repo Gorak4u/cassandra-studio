@@ -1,0 +1,23 @@
+/* Bulk panel (BLK-1/2). Uses the app's CSS variables, so light and dark themes work. */
+.bulk { height: 100%; min-height: 0; }
+.bulk-top { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); background: var(--panel); flex-wrap: wrap; }
+.bulk-tabs { display: flex; gap: 2px; }
+.bulk-tab { padding: 3px 10px; border: 1px solid transparent; border-radius: var(--radius); background: none; cursor: pointer; color: var(--muted); }
+.bulk-tab:hover { color: var(--text); }
+.bulk-tab.active { color: var(--text); background: var(--panel-2); border-color: var(--border); font-weight: 600; }
+.bulk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px 14px; align-items: end; }
+.bulk-grid .bulk-wide { grid-column: 1 / -1; }
+.bulk-grid textarea { width: 100%; }
+.bulk-columns { border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 10px; }
+.bulk-columns legend { color: var(--muted); font-size: 12px; }
+.bulk-advanced > summary { cursor: pointer; color: var(--muted); margin-bottom: 8px; }
+.bulk-sample { max-height: 280px; border: 1px solid var(--border); border-radius: var(--radius); }
+.bulk-sample td { white-space: pre; max-width: 280px; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); font-size: 12px; }
+.bulk-sample caption, .bulk-mapping caption { text-align: left; padding: 4px 8px; }
+.bulk-mapping select { min-width: 200px; }
+.bulk-stats { font-variant-numeric: tabular-nums; margin-top: 6px; }
+.bulk-path { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bulk-job-link { background: none; border: none; padding: 0; color: var(--text); text-decoration: underline; cursor: pointer; font: inherit; text-align: left; }
+.bulk-selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.bulk-selected .bulk-job-link { font-weight: 600; }
+.bulk .mono { font-family: var(--mono); font-size: 12px; }
