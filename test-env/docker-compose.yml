@@ -72,13 +72,14 @@ services:
     ports: ["2203:2222"]
     depends_on: { east1: { condition: service_healthy } }
 
-  # sshd sidecars (profile jmx): inside each node's network namespace, so their port 2222 is published
+  # sshd sidecars (profile jmx): inside each node's network namespace, with its data volume read-only
+  # so df over SSH sees the node's disk;, so their port 2222 is published
   # on the node service above and "localhost:7199" is the node's JMX.
-  east1-ssh: { <<: *sshd, network_mode: "service:east1" }
-  east2-ssh: { <<: *sshd, network_mode: "service:east2" }
-  west1-ssh: { <<: *sshd, network_mode: "service:west1" }
+  east1-ssh: { <<: *sshd, network_mode: "service:east1", volumes_from: ["east1:ro"] }
+  east2-ssh: { <<: *sshd, network_mode: "service:east2", volumes_from: ["east2:ro"] }
+  west1-ssh: { <<: *sshd, network_mode: "service:west1", volumes_from: ["west1:ro"] }
   # 5.0 node: SSH reachable only through the bastion (secure50:2222), like a node with no public SSH.
-  secure50-ssh: { <<: *sshd, network_mode: "service:secure50", profiles: [secure] }
+  secure50-ssh: { <<: *sshd, network_mode: "service:secure50", volumes_from: ["secure50:ro"], profiles: [secure] }
   bastion:
     <<: *sshd
     hostname: bastion

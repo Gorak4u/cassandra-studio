@@ -314,6 +314,9 @@ final class FakeNodes {
         final Map<String, Node> nodes = new ConcurrentHashMap<>();
         final Set<String> unreachable = ConcurrentHashMap.newKeySet();
         final Map<String, List<ExporterSample>> exporter = new ConcurrentHashMap<>();
+        /** Per node: output of any shell command over SSH; absent = no SSH on the route. */
+        final Map<String, String> shell = new ConcurrentHashMap<>();
+        final List<String> commands = new java.util.concurrent.CopyOnWriteArrayList<>();
         volatile long delayMs;
         final AtomicInteger active = new AtomicInteger();
         final AtomicInteger maxActive = new AtomicInteger();
@@ -351,6 +354,14 @@ final class FakeNodes {
                 @Override
                 public String route() {
                     return "direct";
+                }
+
+                @Override
+                public String exec(String command, java.time.Duration timeout) {
+                    String out = shell.get(node.address());
+                    if (out != null) commands.add(command);
+                    if ("FAIL".equals(out)) throw new IllegalStateException("df: cannot access");
+                    return out;
                 }
             };
         }

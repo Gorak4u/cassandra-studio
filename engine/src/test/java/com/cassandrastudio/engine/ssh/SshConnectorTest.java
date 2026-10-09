@@ -189,4 +189,20 @@ class SshConnectorTest {
                     "no-such-host.invalid", TIMEOUT)).hasMessage("unknown host no-such-host.invalid");
         }
     }
+
+    @Test
+    void execReturnsOutputAndReportsFailures() {
+        try (SshConnector c = new SshConnector();
+             SshConnection s = c.connect(ssh(SshAuth.PASSWORD, null),
+                     Map.of(SecretKeys.SSH_PASSWORD, TestSshServer.PASSWORD), "127.0.0.1", TIMEOUT)) {
+            assertThat(s.exec("echo hello", TIMEOUT)).isEqualTo("hello\n");
+            assertThatThrownBy(() -> s.exec("ls /no/such/dir", TIMEOUT))
+                    .isInstanceOf(SshAccessException.class)
+                    .hasMessageContaining("exited with")
+                    .hasMessageContaining("/no/such/dir");
+            assertThatThrownBy(() -> s.exec("sleep 5", Duration.ofMillis(300)))
+                    .isInstanceOf(SshAccessException.class)
+                    .hasMessageContaining("did not finish");
+        }
+    }
 }

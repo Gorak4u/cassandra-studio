@@ -319,4 +319,77 @@ class MonitoringServiceTest {
             assertThat(t.readCount()).isEqualTo(9);
         });
     }
+
+    @Test
+    void diskUsageFromDfOverSshRaisesTheDiskAlert() {
+        jmx.shell.put("10.0.0.1", """
+                Filesystem 1024-blocks Used Available Capacity Mounted on
+                /dev/sda1 1000 950 50 95% /
+                """);
+        Poller p = started();
+        NodeSnapshot a = node(p.latest(), "10.0.0.1");
+        assertThat(a.dataDirs()).singleElement().satisfies(d -> {
+            assertThat(d.totalBytes()).isEqualTo(1000L * 1024); // used 950 + available 50
+            assertThat(d.freeBytes()).isEqualTo(50L * 1024);
+        });
+        assertThat(p.latest().alerts()).anySatisfy(al -> {
+            assertThat(al.rule()).isEqualTo("disk.usage");
+            assertThat(al.level()).isEqualTo(MonitoringModel.Level.RED);
+        });
+        // No SSH on 10.0.0.2's route: sizes stay unknown, no alert.
+        assertThat(node(p.latest(), "10.0.0.2").dataDirs()).allSatisfy(d -> assertThat(d.totalBytes()).isNull());
+        // Cached between polls, refreshed after DISK_REFRESH_MS.
+        int before = jmx.commands.size();
+        p.pollOnce();
+        assertThat(jmx.commands).hasSize(before);
+        clock.addAndGet(Poller.DISK_REFRESH_MS);
+        p.pollOnce();
+        assertThat(jmx.commands).hasSize(before + 1);
+    }
+
+    @Test
+    void dfFailureLeavesSizesUnknown() {
+        jmx.shell.put("10.0.0.1", "FAIL");
+        Poller p = started();
+        assertThat(node(p.latest(), "10.0.0.1").dataDirs()).singleElement()
+                .satisfies(d -> assertThat(d.totalBytes()).isNull());
+        assertThat(node(p.latest(), "10.0.0.1").error()).isNull();
+    }
+
+    @Test
+    void unreachableJmxFallsBackToTheExporter() {
+        jmx.unreachable.add("10.0.0.1");
+        jmx.exporter.put("10.0.0.1", List.of(
+                new ExporterSample("jvm_memory_bytes_used", Map.of("area", "heap"), 100),
+                new ExporterSample("cassandra_storage_load", Map.of(), 5000)));
+        Poller p = started();
+        NodeSnapshot a = node(p.latest(), "10.0.0.1");
+        assertThat(a.error()).isNull();
+        assertThat(a.route()).startsWith("jmx_exporter (JMX unreachable: Connection refused");
+        assertThat(a.heapUsedBytes()).isEqualTo(100);
+        assertThat(p.latest().alerts()).noneSatisfy(al -> assertThat(al.id()).isEqualTo("node.unreachable:10.0.0.1"));
+
+        // JMX comes back: read over JMX again.
+        jmx.unreachable.remove("10.0.0.1");
+        p.pollOnce();
+        assertThat(node(p.latest(), "10.0.0.1").route()).isEqualTo("direct");
+    }
+
+    @Test
+    void exporterFailureReportsTheJmxReasonAndIsNotRetriedAtOnce() {
+        jmx.unreachable.add("10.0.0.1");
+        Poller p = started();
+        assertThat(node(p.latest(), "10.0.0.1").error()).contains("Connection refused");
+        // Exporter appears, but it is only tried again after EXPORTER_RETRY_MS.
+        jmx.exporter.put("10.0.0.1", List.of(new ExporterSample("cassandra_storage_load", Map.of(), 5000)));
+        p.pollOnce();
+        assertThat(node(p.latest(), "10.0.0.1").error()).contains("Connection refused");
+        clock.addAndGet(Poller.EXPORTER_RETRY_MS);
+        p.pollOnce();
+        assertThat(node(p.latest(), "10.0.0.1").loadBytes()).isEqualTo(5000);
+    }
+
+    private static NodeSnapshot node(MonitoringModel.ClusterSnapshot s, String address) {
+        return s.nodes().stream().filter(n -> n.address().equals(address)).findFirst().orElseThrow();
+    }
 }

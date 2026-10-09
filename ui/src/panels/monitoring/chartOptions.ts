@@ -5,7 +5,7 @@ import type { LineSeriesOption, PieSeriesOption } from "echarts/charts";
 import type { GridComponentOption, TitleComponentOption, TooltipComponentOption } from "echarts/components";
 import type { Series, SeriesMetric } from "../../lib/monitoringTypes";
 import { fmtBytes, fmtPct, formatterFor, type Unit } from "./format";
-import { stateCode, type TokenRange } from "./health";
+import { isDown, stateCode, type TokenRange } from "./health";
 import type { ChartTheme, NodeStyle } from "./palette";
 
 export type LineOption = ComposeOption<LineSeriesOption | GridComponentOption | TooltipComponentOption>;
@@ -216,7 +216,7 @@ export function buildRingOption(
         emphasis: { scale: true, scaleSize: 4 },
         data: ranges.map((r) => {
           const st = styles.get(r.address);
-          const down = !stateCode(info.get(r.address)?.state).startsWith("U");
+          const down = isDown(info.get(r.address)?.state);
           return {
             name: r.address,
             value: r.size,

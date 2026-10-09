@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import type { Latency, NodeSnapshot } from "../../lib/monitoringTypes";
 import { fmtBytes, fmtCount, fmtDuration, fmtMicros, fmtMs, fmtPct, fmtRate } from "./format";
-import { stateCode } from "./health";
+import { stateClass, stateCode } from "./health";
 import { UsageBar, Val } from "./common";
 
 function Field(props: { label: string; children: ReactNode }) {
@@ -23,7 +23,7 @@ export function NodeDrawer(props: { node: NodeSnapshot | null; address: string; 
     <aside className="mon-drawer" role="dialog" aria-label={`Node ${props.address}`} data-testid="monitoring-node-drawer">
       <header>
         <span className="mono">{props.address}</span>
-        {n && <span className={"status " + (stateCode(n.state).startsWith("U") ? "UP" : "DOWN")}>{stateCode(n.state)}</span>}
+        {n && <span className={"status " + stateClass(n.state)}>{stateCode(n.state)}</span>}
         <span className="spacer" />
         <button ref={close} className="btn small" onClick={onClose} aria-label="Close node details">✕</button>
       </header>

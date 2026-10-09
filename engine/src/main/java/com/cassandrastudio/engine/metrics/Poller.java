@@ -7,12 +7,14 @@ import com.cassandrastudio.engine.jmx.NodeEndpoint;
 import com.cassandrastudio.engine.metrics.MonitoringModel.AccessStatus;
 import com.cassandrastudio.engine.metrics.MonitoringModel.Alert;
 import com.cassandrastudio.engine.metrics.MonitoringModel.ClusterSnapshot;
+import com.cassandrastudio.engine.metrics.MonitoringModel.DataDir;
 import com.cassandrastudio.engine.metrics.MonitoringModel.Health;
 import com.cassandrastudio.engine.metrics.MonitoringModel.Level;
 import com.cassandrastudio.engine.metrics.MonitoringModel.NodeAccess;
 import com.cassandrastudio.engine.metrics.MonitoringModel.NodeSnapshot;
 import com.cassandrastudio.engine.model.ConnectionConfig;
 import com.cassandrastudio.engine.model.ConnectionConfig.JmxMethod;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -59,6 +61,8 @@ final class Poller {
     private final Map<String, NodeState> nodes = new ConcurrentHashMap<>();
     /** A lock, not a monitor: a virtual thread blocking inside {@code synchronized} pins its carrier. */
     private final ReentrantLock pollLock = new ReentrantLock();
+    static final long DISK_REFRESH_MS = 60_000;
+    static final long EXPORTER_RETRY_MS = 5 * 60_000;
     private volatile boolean running;
     private volatile Thread thread;
     private volatile ClusterSnapshot latest;
@@ -69,6 +73,14 @@ final class Poller {
         final NodeReader jmxReader = new NodeReader();
         final ExporterReader exporterReader = new ExporterReader();
         final AtomicBoolean inFlight = new AtomicBoolean();
+        /** Data dir sizes from df over SSH, refreshed every {@link #DISK_REFRESH_MS}. */
+        List<DataDir> disk;
+        long diskAtMs;
+        String diskError;
+        /** True while JMX is unreachable and the node is read from its jmx_exporter instead. */
+        boolean viaExporter;
+        /** After the exporter fails too, it is not tried again before this time (it may only time out). */
+        long exporterRetryAtMs;
         NodeSnapshot lastOk;
         long lastOkAtMs;
         volatile NodeAccess access;
@@ -275,13 +287,78 @@ final class Poller {
             if (cfg.jmx().method() == JmxMethod.EXPORTER) {
                 return st.exporterReader.read(jmx.scrapeExporter(cfg, ep), id, now);
             }
-            JmxAccess.JmxSession session = jmx.session(cfg, secrets, ep);
-            return st.jmxReader.read(session.mbeans(), session.route(), id, now);
+            JmxAccess.JmxSession session;
+            try {
+                session = jmx.session(cfg, secrets, ep);
+            } catch (JmxAccess.JmxUnavailableException e) {
+                return exporterFallback(ep, id, st, now, e);
+            }
+            if (st.viaExporter) {
+                st.viaExporter = false;
+                st.exporterReader.reset();
+            }
+            NodeReader.Result r = st.jmxReader.read(session.mbeans(), session.route(), id, now);
+            return withDisk(r, session, st, now);
         } catch (RuntimeException e) {
             st.jmxReader.reset();
             st.exporterReader.reset();
             throw e;
         }
+    }
+
+    /**
+     * JMX is unreachable: read the node's jmx_exporter instead when it answers (CON-7), so health
+     * and charts keep going. If the exporter fails too, the JMX reason is the one reported.
+     */
+    private NodeReader.Result exporterFallback(NodeEndpoint ep, NodeReader.Identity id, NodeState st, long now,
+                                               JmxAccess.JmxUnavailableException jmxFailure) {
+        if (now < st.exporterRetryAtMs) throw jmxFailure;
+        List<JmxAccess.ExporterSample> samples;
+        try {
+            samples = jmx.scrapeExporter(cfg, ep);
+        } catch (RuntimeException exporterFailure) {
+            st.viaExporter = false;
+            st.exporterRetryAtMs = now + EXPORTER_RETRY_MS;
+            throw jmxFailure;
+        }
+        if (!st.viaExporter) {
+            st.viaExporter = true;
+            st.jmxReader.reset();
+            st.exporterReader.reset();
+        }
+        NodeReader.Result r = st.exporterReader.read(samples, id, now);
+        NodeBuilder b = NodeBuilder.of(r.snapshot());
+        b.route = "jmx_exporter (JMX unreachable: " + message(jmxFailure) + ")";
+        return new NodeReader.Result(b.build(), r.operationMode(), r.gossip(), r.gcPauseMs());
+    }
+
+    /** Fills data dir sizes from df over SSH; skipped without SSH, and a failure only leaves them unknown. */
+    private NodeReader.Result withDisk(NodeReader.Result r, JmxAccess.JmxSession session, NodeState st, long now) {
+        List<DataDir> dirs = r.snapshot().dataDirs();
+        if (dirs == null || dirs.isEmpty()) return r;
+        if (st.disk == null || now - st.diskAtMs >= DISK_REFRESH_MS || !samePaths(st.disk, dirs)) {
+            try {
+                String out = session.exec(DiskUsage.command(dirs), Duration.ofSeconds(5));
+                if (out == null) return r; // no SSH on this route
+                st.disk = DiskUsage.apply(dirs, out);
+                st.diskError = null;
+            } catch (RuntimeException e) {
+                st.disk = dirs;
+                String m = message(e);
+                if (!m.equals(st.diskError)) LOG.info("disk usage of {} unknown: {}", r.snapshot().address(), m);
+                st.diskError = m;
+            }
+            st.diskAtMs = now;
+        }
+        NodeBuilder b = NodeBuilder.of(r.snapshot());
+        b.dataDirs = st.disk;
+        return new NodeReader.Result(b.build(), r.operationMode(), r.gossip(), r.gcPauseMs());
+    }
+
+    private static boolean samePaths(List<DataDir> a, List<DataDir> b) {
+        if (a.size() != b.size()) return false;
+        for (int i = 0; i < a.size(); i++) if (!a.get(i).path().equals(b.get(i).path())) return false;
+        return true;
     }
 
     private void record(NodeState st, NodeSnapshot snap, Double gcPauseMs, long now) {

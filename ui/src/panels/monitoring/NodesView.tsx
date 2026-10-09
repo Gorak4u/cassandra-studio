@@ -1,6 +1,6 @@
 import type { Alert, NodeSnapshot } from "../../lib/monitoringTypes";
 import { fmtBytes, fmtCount, fmtDuration, fmtMicros, fmtPct, fmtRate, sum } from "./format";
-import { imbalancedNodes, levelRank, stateCode, worstLevel } from "./health";
+import { imbalancedNodes, levelRank, stateClass, stateCode, worstLevel } from "./health";
 import type { NodeStyle } from "./palette";
 import { LevelTag, SortTable, UsageBar, Val, type Col } from "./common";
 
@@ -33,7 +33,7 @@ export function NodesView(props: { nodes: NodeSnapshot[]; alerts: Alert[]; style
     },
     {
       key: "state", label: "State", sort: (n) => stateCode(n.state),
-      render: (n) => <span className={"status " + (stateCode(n.state).startsWith("U") ? "UP" : "DOWN")}>{stateCode(n.state)}</span>,
+      render: (n) => <span className={"status " + stateClass(n.state)} title={stateClass(n.state) === "UNKNOWN" ? "State unknown: neither the driver, the node nor its peers report it" : undefined}>{stateCode(n.state)}</span>,
     },
     { key: "version", label: "Version", sort: (n) => n.cassandraVersion, render: (n) => <Val v={n.cassandraVersion} /> },
     { key: "java", label: "Java", sort: (n) => n.javaVersion, render: (n) => <Val v={n.javaVersion} title={n.javaVendor ?? undefined} /> },

@@ -8,7 +8,7 @@ Updated: 2026-10-09. Requirement IDs refer to [`requirement.txt`](../requirement
 |---|---|---|
 | 0 Foundations | 🟢 done except signing | Builds, packaging, CI, security scans, release pipeline, test-env, ADRs, threat model; signing waits on certificates; job runner moves to Phase 3 |
 | 1 Connections, CQL, schema | 🟢 done | Remaining [S]/[C] items are scheduled in later phases |
-| 2 JMX monitoring | 🟡 in progress | Working end to end on live 3.11 / 4.1 / 5.0: node access (SSH tunnel, bastion jump, direct JMX, jmx_exporter), health + alerts, nodes, charts with 24 h history, ring per DC, table metrics, thresholds. Open: disk usage via SSH `df`, exporter fallback, UI "unknown" state for `?N` |
+| 2 JMX monitoring | 🟢 done | Working end to end on live 3.11 / 4.1 / 5.0: node access (SSH tunnel, bastion jump, direct JMX, jmx_exporter with automatic fallback), health + 12 alert rules, nodes, disk usage over SSH, charts with 24 h history, ring per DC, table metrics, thresholds |
 | 3 Ops, GC logs, diagnostics, backup, bulk → v1.0 | ⚪ | |
 | 4 Studio Server, repair, restore, alerts → v1.1 | ⚪ | |
 | 5–6 Deep diagnostics, provisioning, later items → v1.2 | ⚪ | |
@@ -21,7 +21,7 @@ Updated: 2026-10-09. Requirement IDs refer to [`requirement.txt`](../requirement
 | CQL | CQL-1 … CQL-10 (incl. saved script library), CQL-14 (warnings) | CQL-11 (CSV import), CQL-12, CQL-13, CQL-15, CQL-16 |
 | Schema | SCH-1 … SCH-5 | SCH-6, SCH-7, SCH-8 |
 | Security | SEC-1, SEC-2, SEC-3 (system_auth replication warning), SEC-4 | SEC-5 |
-| Monitoring | MON-1 … MON-18 except disk usage (needs SSH `df`) | Exporter fallback when JMX is unreachable |
+| Monitoring | MON-1 … MON-18; CON-7 exporter fallback | Disk usage on DIRECT-JMX clusters (no SSH) |
 | Alerts | ALR-1 (12 health rules, per-cluster thresholds), ALR-2 (server warnings shown) | ALR-3, 4, 5 |
 | NFR | NFR-SAFE, NFR-AUD, NFR-SEC, NFR-DATA, NFR-UX (theme, shortcuts), NFR-LIC | NFR-SIGN (needs certificates), NFR-SCALE, NFR-A11Y review, NFR-UPD |
 
@@ -29,7 +29,7 @@ Updated: 2026-10-09. Requirement IDs refer to [`requirement.txt`](../requirement
 
 | Check | Result |
 |---|---|
-| Engine unit tests | 135 passing |
+| Engine unit tests | 144 passing |
 | UI unit tests | 50 passing |
 | Integration tests on real Cassandra 3.11 / 4.1 / 5.0 | Plain CQL: 6 per version. TLS + PasswordAuthenticator + CassandraAuthorizer: 2 per version. All passing on all three |
 | OS keychain | CI on Windows and macOS runners |

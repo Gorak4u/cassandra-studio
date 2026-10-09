@@ -24,6 +24,9 @@ Errors use the standard `{error, message, details}` body.
 - `NodeSnapshot.state` is nodetool style `UN/DN/UJ/UL/UM`, or `?N` when neither the driver, the node's JMX nor any peer's gossip knows the state (only `node.unreachable` fires then).
 - Thresholds body: flat object of `number|null` with keys `heap.high.yellowPct`, `heap.high.redPct`, `gc.pressure.yellowPct`, `gc.pressure.redPct`, `compaction.backlog.pending`, `disk.usage.yellowPct`, `disk.usage.redPct`, `load.imbalance.factor`, `hints.backlog.polls`. GET returns effective values; PUT sends the full map, `null` clears an override. Stored in `settings` under `monitoring.thresholds/<id>`.
 - Per-node read timeout = 80 % of the interval, clamped to 1.5–15 s; a node whose previous read still hangs is reported unreachable instead of being read twice.
+- `DataDir` sizes come from `df -Pk` run over the node's SSH session (SSH_TUNNEL only; JMX has no free space), refreshed every 60 s. `totalBytes` is the usable size, used + available, as df's Capacity column counts it; reserved blocks are not counted as used. Without SSH, or when df fails, both stay `null` and `disk.usage` does not fire (the engine log says why).
+- JMX fallback (CON-7): when a node's JMX session fails, its jmx_exporter (`jmx.exporterPort`, default 7071) is read instead and `route` reads `jmx_exporter (JMX unreachable: <reason>)`. If the exporter fails too, the JMX reason is reported and the exporter is not tried again for 5 min. JMX is used again as soon as it answers.
+- The UI shows `?N` as "unknown" (amber), not down: no hatched ring arc and no `node.down`.
 
 ## Health rules (ALR-1) and defaults
 

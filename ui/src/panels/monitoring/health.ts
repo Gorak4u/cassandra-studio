@@ -11,17 +11,27 @@ export function levelRank(l: Level): number {
   return LEVEL_RANK[l];
 }
 
-/** nodetool-style two-letter state (UN, DN, UJ, ...); accepts UP/DOWN too. */
+/** nodetool-style two-letter state (UN, DN, UJ, ...); accepts UP/DOWN too. "?N": nobody knows up or down. */
 export function stateCode(state: string | null | undefined): string {
   const s = (state ?? "").toUpperCase();
   if (s === "UP" || s === "NORMAL") return "UN";
   if (s === "DOWN") return "DN";
-  if (/^[UD][NJLM]$/.test(s)) return s;
-  return "?";
+  if (/^[UD?][NJLM]$/.test(s)) return s;
+  return "?N";
 }
 
 export function isUp(state: string | null | undefined): boolean {
   return stateCode(state).startsWith("U");
+}
+
+/** Status pill class: an unknown state is not shown as down (only node.unreachable fires for it). */
+export function stateClass(state: string | null | undefined): "UP" | "DOWN" | "UNKNOWN" {
+  const c = stateCode(state);
+  return c.startsWith("U") ? "UP" : c.startsWith("D") ? "DOWN" : "UNKNOWN";
+}
+
+export function isDown(state: string | null | undefined): boolean {
+  return stateClass(state) === "DOWN";
 }
 
 export interface DcCounts { dc: string; total: number; byState: Record<string, number>; unreachable: number }

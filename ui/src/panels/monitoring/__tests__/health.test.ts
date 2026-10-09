@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accessProblem, countsByDc, imbalancedNodes, isUp, stateCode, tokenFraction, tokenRanges, worstLevel } from "../health";
+import { accessProblem, countsByDc, imbalancedNodes, isDown, isUp, stateClass, stateCode, tokenFraction, tokenRanges, worstLevel } from "../health";
 import { mockSnapshot } from "../../../lib/monitoringMock";
 import type { RingNode } from "../../../lib/monitoringTypes";
 
@@ -19,7 +19,14 @@ describe("health helpers", () => {
     expect(stateCode("UP")).toBe("UN");
     expect(stateCode("DOWN")).toBe("DN");
     expect(stateCode("uj")).toBe("UJ");
-    expect(stateCode("weird")).toBe("?");
+    expect(stateCode("weird")).toBe("?N");
+    expect(stateCode("?N")).toBe("?N");
+    // Unknown is neither up nor down: amber pill, no hatched ring arc, only node.unreachable fires.
+    expect(stateClass("?N")).toBe("UNKNOWN");
+    expect(stateClass("DN")).toBe("DOWN");
+    expect(stateClass("UJ")).toBe("UP");
+    expect(isDown("?N")).toBe(false);
+    expect(isDown("DN")).toBe(true);
     expect(isUp("UL")).toBe(true);
     expect(isUp("DN")).toBe(false);
     expect(isUp(null)).toBe(false);

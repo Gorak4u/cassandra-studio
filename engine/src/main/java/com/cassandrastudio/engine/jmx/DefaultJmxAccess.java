@@ -507,6 +507,12 @@ public final class DefaultJmxAccess implements JmxAccess {
             return route;
         }
 
+        @Override
+        public String exec(String command, Duration timeout) {
+            if (tunnel == null) return null;
+            return tunnel.exec(command, timeout);
+        }
+
         void close() {
             broken = true;
             sockets.readTimeout(Duration.ofSeconds(2)); // a dead node must not hold up the close

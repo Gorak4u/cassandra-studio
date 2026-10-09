@@ -44,6 +44,14 @@ public interface JmxAccess extends AutoCloseable {
 
         /** How this session reaches the node, for the UI, e.g. "ssh tunnel via bastion:22". */
         String route();
+
+        /**
+         * Runs a read-only shell command on the node over the session's SSH connection and returns
+         * its standard output, or null when the session has no SSH (DIRECT). Throws on failure.
+         */
+        default String exec(String command, java.time.Duration timeout) {
+            return null;
+        }
     }
 
     /** One line of Prometheus text format, e.g. cassandra_load_bytes{node="x"} 1234. */

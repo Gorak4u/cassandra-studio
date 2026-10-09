@@ -3,7 +3,7 @@ import type { MonitoringClient } from "../../lib/monitoringApi";
 import type { NodeSnapshot, Ring, RingDc } from "../../lib/monitoringTypes";
 import { buildRingOption, type RingNodeInfo } from "./chartOptions";
 import { fmtBytes, fmtPct } from "./format";
-import { imbalancedNodes, stateCode, tokenRanges } from "./health";
+import { imbalancedNodes, isDown, stateClass, stateCode, tokenRanges } from "./health";
 import { ErrorState, Loading, SortTable, Val, type Col } from "./common";
 import { EChart } from "./EChart";
 import type { ChartTheme, NodeStyle } from "./palette";
@@ -58,7 +58,7 @@ export default function RingView(props: { client: MonitoringClient; styles: Map<
       ),
     },
     { key: "rack", label: "Rack", sort: (r) => r.rack, render: (r) => <Val v={r.rack} /> },
-    { key: "state", label: "State", sort: (r) => r.state, render: (r) => <span className={"status " + (r.state.startsWith("U") ? "UP" : "DOWN")}>{r.state}</span> },
+    { key: "state", label: "State", sort: (r) => r.state, render: (r) => <span className={"status " + stateClass(r.state)}>{r.state}</span> },
     {
       key: "load", label: "Load", num: true, sort: (r) => r.loadBytes,
       render: (r) => r.ratio ? <span className="mon-warn-text">▲ {fmtBytes(r.loadBytes)} ({r.ratio.toFixed(2)}× DC avg)</span> : <Val v={fmtBytes(r.loadBytes)} />,
@@ -87,7 +87,7 @@ export default function RingView(props: { client: MonitoringClient; styles: Map<
           <DcRing key={dc.name} dc={dc} partitioner={ring.partitioner} rows={rows} styles={props.styles} dark={props.dark} onNode={props.onNode} />
         ))}
       </div>
-      <div className="muted mon-footnote">Arcs are token ranges coloured by owning node; hatched, faded arcs belong to nodes that are not up. Click an arc for node details.</div>
+      <div className="muted mon-footnote">Arcs are token ranges coloured by owning node; hatched, faded arcs belong to nodes that are down. Click an arc for node details.</div>
       <div className="panel">
         <h3>Ownership</h3>
         <SortTable rows={rows} cols={cols} rowKey={(r) => r.address} label="Token ownership" initial={{ key: "dc", dir: "asc" }} rowClass={(r) => (r.ratio ? "mon-row-warn" : undefined)} />
@@ -106,8 +106,8 @@ function DcRing(props: { dc: RingDc; partitioner: string | null; rows: Row[]; st
     [rows, dc.name],
   );
   const build = useCallback((theme: ChartTheme) => buildRingOption(dc.name, ranges, styles, info, theme), [dc.name, ranges, styles, info]);
-  const down = [...info.values()].filter((i) => !i.state.startsWith("U")).length;
-  const label = `Token ring of ${dc.name}: ${info.size} nodes, ${ranges.length} token ranges${down ? `, ${down} not up` : ""}. `
+  const down = [...info.values()].filter((i) => isDown(i.state)).length;
+  const label = `Token ring of ${dc.name}: ${info.size} nodes, ${ranges.length} token ranges${down ? `, ${down} down` : ""}. `
     + [...info].map(([a, i]) => `${a} owns ${fmtPct(i.ownershipPct) ?? "n/a"}`).join("; ");
   return (
     <div className="panel mon-ring">

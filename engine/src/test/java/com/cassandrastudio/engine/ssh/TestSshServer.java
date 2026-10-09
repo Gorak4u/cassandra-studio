@@ -13,6 +13,7 @@ import org.apache.sshd.common.config.keys.writer.openssh.OpenSSHKeyPairResourceW
 import org.apache.sshd.common.keyprovider.KeyPairProvider;
 import org.apache.sshd.server.SshServer;
 import org.apache.sshd.server.forward.AcceptAllForwardingFilter;
+import org.apache.sshd.server.shell.ProcessShellCommandFactory;
 
 /**
  * In-process SSH server for tests: user "studio", password "secret" or the client key from
@@ -37,6 +38,7 @@ public final class TestSshServer implements AutoCloseable {
         server.setPublickeyAuthenticator((user, key, session) ->
                 USER.equals(user) && KeyUtils.compareKeys(key, clientKey.getPublic()));
         server.setForwardingFilter(AcceptAllForwardingFilter.INSTANCE);
+        server.setCommandFactory(ProcessShellCommandFactory.INSTANCE); // exec runs a real local process
         server.start();
     }
 
