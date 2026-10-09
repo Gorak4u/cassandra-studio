@@ -175,11 +175,11 @@ public final class EngineServer implements AutoCloseable {
             String id = ctx.pathParam("id");
             engine.connections.get(id);
             ConnectionConfig saved = engine.connections.save(r.connection().withId(id), r.secrets());
-            engine.sessions.disconnect(id); // settings changed: reconnect on next use
+            engine.disconnect(id); // settings changed: reconnect on next use
             ctx.json(saved);
         });
         app.delete("/api/connections/{id}", ctx -> {
-            engine.sessions.disconnect(ctx.pathParam("id"));
+            engine.disconnect(ctx.pathParam("id"));
             engine.connections.delete(ctx.pathParam("id"));
             ctx.status(204);
         });
@@ -189,11 +189,14 @@ public final class EngineServer implements AutoCloseable {
             ctx.json(engine.clusters.info(ctx.pathParam("id")));
         });
         app.post("/api/connections/{id}/disconnect", ctx -> {
-            engine.sessions.disconnect(ctx.pathParam("id"));
+            engine.disconnect(ctx.pathParam("id"));
             ctx.status(204);
         });
         app.get("/api/connections/{id}/status", ctx ->
                 ctx.json(Map.of("connected", engine.sessions.isConnected(ctx.pathParam("id")))));
+
+        // monitoring (Phase 2, docs/api/monitoring.md)
+        MonitoringRoutes.register(app, engine.monitoring);
 
         // cluster (CON-5)
         app.get("/api/clusters/{id}/info", ctx -> ctx.json(engine.clusters.info(ctx.pathParam("id"))));

@@ -7,6 +7,10 @@ import com.cassandrastudio.engine.cql.QueryService;
 import com.cassandrastudio.engine.cql.RowEditService;
 import com.cassandrastudio.engine.cql.SessionManager;
 import com.cassandrastudio.engine.guard.ActionGuard;
+import com.cassandrastudio.engine.jmx.DefaultJmxAccess;
+import com.cassandrastudio.engine.jmx.JmxAccess;
+import com.cassandrastudio.engine.metrics.DriverTopology;
+import com.cassandrastudio.engine.metrics.MonitoringService;
 import com.cassandrastudio.engine.schema.SchemaService;
 import com.cassandrastudio.engine.secrets.SecretStore;
 import com.cassandrastudio.engine.security.RoleService;
@@ -27,6 +31,8 @@ public final class Engine implements AutoCloseable {
     public final RoleService roles;
     public final RowEditService rowEdits;
     public final ScriptRepository scripts;
+    public final JmxAccess jmx;
+    public final MonitoringService monitoring;
 
     public Engine(Database db, SecretStore secrets, String actor) {
         this.db = db;
@@ -41,10 +47,21 @@ public final class Engine implements AutoCloseable {
         this.roles = new RoleService(sessions);
         this.rowEdits = new RowEditService(sessions);
         this.scripts = new ScriptRepository(db);
+        this.jmx = new DefaultJmxAccess();
+        this.monitoring = new MonitoringService(db, connections, jmx, new DriverTopology(sessions, clusters));
+    }
+
+    /** Drops everything held open for a connection: monitoring, JMX/SSH tunnels, the driver session. */
+    public void disconnect(String connectionId) {
+        monitoring.stop(connectionId);
+        jmx.closeConnection(connectionId);
+        sessions.disconnect(connectionId);
     }
 
     @Override
     public void close() {
+        monitoring.close();
+        jmx.close();
         sessions.close();
         db.close();
     }

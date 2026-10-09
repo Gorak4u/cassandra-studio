@@ -10,8 +10,9 @@ import javax.management.MBeanServerConnection;
  * node's JMX, or its jmx_exporter endpoint when JMX is not reachable (CON-6, CON-7).
  *
  * <ul>
- *   <li>SSH_TUNNEL (estate default): SSH to the node, forward localhost:7199. Cassandra
- *       serves the RMI registry and RMI objects on the same port, so one forward works.</li>
+ *   <li>SSH_TUNNEL (estate default): SSH to the node, forward localhost:7199. With stock
+ *       LOCAL_JMX=yes the RMI server object listens on a random port, so every port the
+ *       stubs advertise gets its own forward through the same SSH session.</li>
  *   <li>DIRECT: JMX/RMI to node:port, optional username/password and SSL.</li>
  *   <li>EXPORTER: no JMX; metrics only, read from http://node:exporterPort/metrics.</li>
  *   <li>SIDECAR / NONE: {@link #session} throws {@link UnsupportedOperationException}.</li>
