@@ -52,7 +52,9 @@ export function JobProgress(props: { jobId: string | null; onDone?: (j: Job) => 
       </div>
       {(job.message || job.error) && <div className={job.error ? "job-error" : "muted"}>{job.error ?? job.message}</div>}
       {props.showLog !== false && job.log.length > 0 && (
-        <details className="job-log"><summary>Log ({job.log.length} lines)</summary><pre>{job.log.join("\n")}</pre></details>
+        <details className="job-log"><summary>Log ({job.log.length} lines)</summary>
+          {/* focusable so keyboard users can scroll it */}
+          <pre tabIndex={0} aria-label={`Log of ${job.title}`}>{job.log.join("\n")}</pre></details>
       )}
     </div>
   );

@@ -30,6 +30,8 @@
   --text: #e6e9ed;
   --muted: #98a2ae;
   --accent: #4c8dff;
+  /* white on #4c8dff is ~3.3:1; the dark background colour on it is ~6:1 (WCAG AA) */
+  --accent-text: #0f1216;
   --danger: #ff6b6b;
   --danger-bg: #3a1618;
   --warn: #f0b429;
