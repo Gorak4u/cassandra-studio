@@ -107,32 +107,33 @@ public final class JobService implements AutoCloseable {
 
     private void run(Running r, JobTask task) {
         r.start(clock.getAsLong());
+        Job.State state;
+        Object result = null;
+        String error = null;
         try {
             r.checkCancelled();
-            Object result = task.run(r);
-            if (r.cancelled()) {
-                r.finish(Job.State.CANCELLED, null, null, clock.getAsLong());
-            } else {
-                r.finish(Job.State.SUCCEEDED, result, null, clock.getAsLong());
-            }
+            result = task.run(r);
+            state = r.cancelled() ? Job.State.CANCELLED : Job.State.SUCCEEDED;
         } catch (CancellationException | InterruptedException e) {
-            r.finish(Job.State.CANCELLED, null, null, clock.getAsLong());
+            state = Job.State.CANCELLED;
         } catch (Throwable e) {
-            String m = e.getMessage() == null || e.getMessage().isBlank() ? e.getClass().getSimpleName() : e.getMessage();
-            LOG.info("job {} ({}) failed: {}", r.id, r.spec.title(), m);
-            r.finish(Job.State.FAILED, null, m, clock.getAsLong());
+            error = e.getMessage() == null || e.getMessage().isBlank() ? e.getClass().getSimpleName() : e.getMessage();
+            LOG.info("job {} ({}) failed: {}", r.id, r.spec.title(), error);
+            state = Job.State.FAILED;
         }
+        long now = clock.getAsLong();
+        // Audit before the job reads as finished, so a caller that sees it done also sees the audit entry.
         if (r.spec.auditCategory() != null && r.conn != null) {
-            Job j = r.snapshot();
-            AuditLog.Outcome outcome = j.state() == Job.State.SUCCEEDED ? AuditLog.Outcome.SUCCESS : AuditLog.Outcome.FAILED;
-            long ms = j.finishedAtMs() - (j.startedAtMs() == null ? j.createdAtMs() : j.startedAtMs());
-            String detail = "job " + j.id() + " " + j.state() + " after " + ms + " ms";
+            long ms = now - (r.startedAt == null ? r.createdAt : r.startedAt);
+            AuditLog.Outcome outcome = state == Job.State.SUCCEEDED ? AuditLog.Outcome.SUCCESS : AuditLog.Outcome.FAILED;
             try {
-                audit.record(r.conn, r.spec.node(), r.spec.auditCategory(), r.spec.title(), detail, outcome, j.error());
+                audit.record(r.conn, r.spec.node(), r.spec.auditCategory(), r.spec.title(),
+                        "job " + r.id + " " + state + " after " + ms + " ms", outcome, error);
             } catch (RuntimeException e) {
                 LOG.warn("could not audit job {}: {}", r.id, e.getMessage());
             }
         }
+        r.finish(state, state == Job.State.SUCCEEDED ? result : null, error, now);
     }
 
     private void prune() {
