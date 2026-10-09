@@ -112,7 +112,7 @@ jobs:
           (cd engine && ./gradlew --no-daemon -q shadowJar)
           (cd ui && npm ci --no-audit --no-fund && npm run build && npx playwright install --with-deps chromium)
       - name: Wait for every node to be up
-        run: docker compose -f test-env/docker-compose.yml --profile secure up -d --wait --wait-timeout 600
+        run: docker compose -f test-env/docker-compose.yml --profile secure up -d --wait --wait-timeout 300
       - name: Start engine
         run: |
           java -jar engine/build/libs/cassandra-studio-engine-all.jar --port 18080 --token e2e --data-dir "$RUNNER_TEMP/studio" \

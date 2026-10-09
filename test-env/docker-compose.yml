@@ -10,11 +10,8 @@ x-cassandra: &cassandra
     MAX_HEAP_SIZE: 512M
     HEAP_NEWSIZE: 100M
     CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
-    # Test-only speed-ups for EMPTY nodes (never use on real clusters): no gossip-settle wait, short ring
-    # delay, and allow several nodes to bootstrap at once. Cuts cluster start from ~4 min to ~1.5 min.
-    JVM_EXTRA_OPTS: >-
-      -Dcassandra.skip_wait_for_gossip_to_settle=0 -Dcassandra.ring_delay_ms=1000
-      -Dcassandra.consistent.rangemovement=false
+    # Test-only speed-ups for EMPTY nodes (never use on real clusters): no gossip-settle wait, short ring delay.
+    JVM_EXTRA_OPTS: -Dcassandra.skip_wait_for_gossip_to_settle=0 -Dcassandra.ring_delay_ms=1000
   healthcheck:
     # Exact match: nodetool's own error text ("...Is it running?") must not count as healthy.
     test: ["CMD-SHELL", "nodetool statusbinary 2>/dev/null | grep -qx running"]
@@ -34,12 +31,18 @@ services:
     <<: *cassandra
     image: cassandra:4.1
     hostname: east2
+    # Empty test node: join without bootstrap streaming. Parallel bootstraps could stall a node in JOINING
+    # for minutes (seen in CI); with nothing to stream, auto_bootstrap: false is safe and joins in seconds.
+    entrypoint: ["bash", "-c", "grep -q '^auto_bootstrap:' /etc/cassandra/cassandra.yaml || echo 'auto_bootstrap: false' >> /etc/cassandra/cassandra.yaml; exec docker-entrypoint.sh cassandra -f"]
     environment: { <<: *env, CASSANDRA_CLUSTER_NAME: acme-core, CASSANDRA_SEEDS: east1, CASSANDRA_NUM_TOKENS: "16", CASSANDRA_DC: dc_east, CASSANDRA_RACK: rack2 }
     depends_on: { east1: { condition: service_healthy } }
   west1:
     <<: *cassandra
     image: cassandra:4.1
     hostname: west1
+    # Empty test node: join without bootstrap streaming. Parallel bootstraps could stall a node in JOINING
+    # for minutes (seen in CI); with nothing to stream, auto_bootstrap: false is safe and joins in seconds.
+    entrypoint: ["bash", "-c", "grep -q '^auto_bootstrap:' /etc/cassandra/cassandra.yaml || echo 'auto_bootstrap: false' >> /etc/cassandra/cassandra.yaml; exec docker-entrypoint.sh cassandra -f"]
     environment: { <<: *env, CASSANDRA_CLUSTER_NAME: acme-core, CASSANDRA_SEEDS: east1, CASSANDRA_NUM_TOKENS: "16", CASSANDRA_DC: dc_west, CASSANDRA_RACK: rack1 }
     depends_on: { east1: { condition: service_healthy } }
 
