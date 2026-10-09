@@ -7,8 +7,9 @@ import { QueryPanel } from "./QueryPanel";
 import { SchemaPanel } from "./SchemaPanel";
 import { RolesPanel } from "./RolesPanel";
 import { HistoryPanel } from "./HistoryPanel";
+import { MonitoringPanel } from "./monitoring/MonitoringPanel";
 
-type Tab = "overview" | "query" | "schema" | "roles" | "history";
+type Tab = "overview" | "monitoring" | "query" | "schema" | "roles" | "history";
 
 /** One open cluster: its tabs share the connection and cluster info (CON-11). */
 export function Workspace(props: { conn: ConnectionConfig; dark: boolean; onConnected: (id: string, ok: boolean) => void }) {
@@ -41,7 +42,7 @@ export function Workspace(props: { conn: ConnectionConfig; dark: boolean; onConn
   };
 
   const tabs: [Tab, string][] = [
-    ["overview", "Overview"], ["query", "Query"], ["schema", "Schema"], ["roles", "Users & roles"], ["history", "History"],
+    ["overview", "Overview"], ["monitoring", "Monitoring"], ["query", "Query"], ["schema", "Schema"], ["roles", "Users & roles"], ["history", "History"],
   ];
 
   return (
@@ -71,6 +72,7 @@ export function Workspace(props: { conn: ConnectionConfig; dark: boolean; onConn
             <div style={{ display: tab === "query" ? "block" : "none", height: "100%" }}>
               <QueryPanel conn={props.conn} info={info} dark={props.dark} openText={openText} />
             </div>
+            {tab === "monitoring" && <MonitoringPanel conn={props.conn} info={info} dark={props.dark} />}
             {tab === "schema" && <SchemaPanel conn={props.conn} onOpenInEditor={openInEditor} />}
             {tab === "roles" && <RolesPanel conn={props.conn} />}
             {tab === "history" && <HistoryPanel conn={props.conn} onOpenInEditor={openInEditor} />}
