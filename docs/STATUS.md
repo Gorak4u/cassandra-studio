@@ -42,6 +42,6 @@ Updated: 2026-10-08. Requirement IDs refer to [`requirement.txt`](../requirement
 
 ## Waiting on the owner
 
-1. Decisions Q-1 … Q-6 (requirement.txt §6).
+1. Decisions Q-2 … Q-6 (requirement.txt §6). Q-1 decided: no access control for now.
 2. Code-signing: Apple Developer ID and a Windows code-signing certificate.
 3. A non-prod cluster from the estate for a pilot (CQL and SSH access).

@@ -361,9 +361,10 @@ deployed as a container or Linux service close to the clusters.
 SRV-1 [S] Desktop app connects to a Studio Server and then uses it for
           cluster access (no SSH/JMX from laptops needed), or works
           standalone as before. The mode is per workspace.
-SRV-2 [S] Single sign-on (OIDC / SAML, LDAP / Active Directory) and role-
+SRV-2 [C] Single sign-on (OIDC / SAML, LDAP / Active Directory) and role-
           based access: viewer / developer / operator / admin, granted per
-          folder or per cluster (answers Q-1).
+          folder or per cluster. Deferred: Q-1 decided no access control for
+          now.
 SRV-3 [S] Shared, central connection catalogue and saved queries/dashboards,
           with per-user private items (answers Q-2). Secrets held in the
           server's vault (HashiCorp Vault, AWS/GCP secret manager or an
@@ -699,8 +700,12 @@ A-3 Rundeck and the estate scripts installed by cassandra_pfpt are the
     supported way to change nodes; Studio drives them (PRV, RUN, BAK).
 A-4 Studio Server can be hosted inside the network that reaches the
     clusters (it needs CQL, SSH/JMX and object-storage access).
-Q-1 Who may run operations? Proposed answer: RBAC roles in SRV-2; in
-    desktop-only mode, a per-connection "operator" flag.
+Q-1 Who may run operations?
+    DECIDED (2026-10-09, owner): open to all for now - no access control.
+    Every user may run every operation. Safety confirmations (NFR-SAFE:
+    typed cluster name on PROD, read-only connections) and the audit log
+    (NFR-AUD) stay, as they prevent accidents rather than restrict users.
+    RBAC (SRV-2) is deferred until requested.
 Q-2 Shared connection list? Proposed answer: Studio Server catalogue
     (SRV-3); file import/export (CON-9) stays for desktop-only users.
 Q-3 Is DataStax Enterprise or ScyllaDB support ever needed?

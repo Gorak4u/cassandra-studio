@@ -89,7 +89,7 @@ Cassandra 3.11 (29042) and, with `--profile secure`, Cassandra 5.0 with TLS and 
 user `cassandra` / `cassandra`, truststore `test-env/certs/node.pem`).
 
 ```bash
-cd test-env && ./make-certs.sh && docker compose --profile secure up -d --wait
+cd test-env && ./make-certs.sh && ./wait-ready.sh
 ```
 
 ## Tests
