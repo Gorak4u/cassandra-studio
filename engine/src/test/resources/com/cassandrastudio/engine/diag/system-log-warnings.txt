@@ -1,0 +1,11 @@
+# Lines 1-3: real warnings from the test-env (docker exec ... grep system.log) after reading
+# t2_diag.tomb with 1200 cell tombstones: Cassandra 4.1 (acme-core), 3.11 (legacy-311), 5.0 (secure-50).
+WARN  [ReadStage-1] 2026-10-09 09:01:10,768 ReadCommand.java:607 - Read 1200 live rows and 1200 tombstone cells for query SELECT * FROM t2_diag.tomb WHERE pk = 7 ALLOW FILTERING; token 1634052884888577606 (see tombstone_warn_threshold)
+WARN  [ReadStage-4] 2026-10-09 09:01:18,869 ReadCommand.java:576 - Read 1200 live rows and 1200 tombstone cells for query SELECT * FROM t2_diag.tomb WHERE pk = 7 ; token 1634052884888577606 (see tombstone_warn_threshold)
+WARN  [ReadStage-1] 2026-10-09T09:01:31,839 ReadCommand.java:644 - Read 1200 live rows and 1200 tombstone cells for query SELECT * FROM t2_diag.tomb WHERE pk = 7  ALLOW FILTERING; token 1634052884888577606 (see tombstone_warn_threshold)
+# Large partitions (the test-env has none over the 100 MiB threshold): the wordings of 3.11 (bytes) and 4.x/5.0 (pretty-printed).
+WARN  [CompactionExecutor:3] 2026-10-08 22:14:05,112 BigTableWriter.java:211 - Writing large partition shop/orders:customer-17 (157286400 bytes) to sstable /var/lib/cassandra/data/shop/orders-1b2c/mc-12-big-Data.db
+WARN  [CompactionExecutor:3] 2026-10-08 22:15:41,003 BigTableWriter.java:204 - Compacting large partition shop/orders:customer-17 (157286400 bytes)
+WARN  [CompactionExecutor:1] 2026-10-09 03:02:11,442 BigTableWriter.java:263 - Writing large partition shop/events_e2e:2026-10-08:eu (110.123MiB) to sstable /var/lib/cassandra/data/shop/events_e2e-9a8b/nb-41-big-Data.db
+ERROR [ReadStage-2] 2026-10-09 07:45:00,001 StorageProxy.java:2101 - Scanned over 100001 tombstones during query 'SELECT * FROM shop.inbox WHERE user = 5 LIMIT 5000' (last scanned row token was -4069959284402364209 and partion key was ((5))); query aborted
+INFO  [main] 2026-10-09 07:45:00,002 StorageService.java:1 - an unrelated line that the parser skips
