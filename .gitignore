@@ -15,3 +15,6 @@ node_modules/
 *.tsbuildinfo
 desktop/resources/
 ui/public/monaco/
+
+# Local agent worktrees
+.claude/worktrees/
