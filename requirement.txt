@@ -396,13 +396,22 @@ REP-4 [S] Repair history and coverage: last successful repair per table and
 REP-5 [S] Safety: no repair start when a node is down, when pending
           compactions or streaming are above a threshold, or during a
           configured blackout window.
-REP-6 [S] Integrate with an existing Cassandra Reaper (REST API): show and
-          control its runs and schedules instead of running repairs twice.
-          Also detect the estate's systemd repair timers and show them.
+REP-6 [M] Repair providers, chosen per cluster (Q-6): (a) built-in
+          segmented repair (REP-1..5); (b) an existing Cassandra Reaper via
+          its REST API - show and control its runs and schedules instead of
+          repairing twice; (c) custom repair scripts or systemd timers on the
+          nodes. Studio auto-detects what a cluster uses (Reaper URL, timers,
+          known scripts) and asks when unsure.
+REP-7 [M] Custom repair provider: an admin defines the command to run per
+          node or per cluster (e.g. /opt/scripts/range-repair.sh {keyspace}),
+          how to read its progress or log, and its success exit code; Studio
+          runs it over SSH with the same confirmations, audit and live output
+          as built-in operations.
 
 4.10 BACKUP AND RESTORE - Medusa / estate scripts (BAK)
 -------------------------------------------------------
-BAK-1 [M] Backup providers, chosen per cluster:
+BAK-1 [M] Backup providers, chosen per cluster (Q-6: any of these may be in
+          use, and Studio auto-detects them where possible):
             a) estate scripts already on the nodes (full-backup-to-s3,
                incremental-backup-to-s3, restore-from-s3, verify-backup,
                backup-status) - S3, GCS, Azure, local
@@ -422,6 +431,10 @@ BAK-6 [S] Backup schedules and retention policies (SRV-5); alert when the
           last good backup is older than the policy allows.
 BAK-7 [C] Restore drill report: periodic automatic restore to a scratch
           cluster to prove backups work.
+BAK-8 [M] Custom backup provider: an admin defines the backup, list,
+          verify and restore commands (with {keyspace}, {table}, {node},
+          {snapshot} placeholders) for scripts that are not the estate's
+          or Medusa; Studio runs them over SSH with confirmations and audit.
 
 4.11 GC LOG ANALYSIS - GCViewer / GCeasy equivalent (GCL)
 ---------------------------------------------------------
@@ -706,14 +719,23 @@ Q-1 Who may run operations?
     typed cluster name on PROD, read-only connections) and the audit log
     (NFR-AUD) stay, as they prevent accidents rather than restrict users.
     RBAC (SRV-2) is deferred until requested.
-Q-2 Shared connection list? Proposed answer: Studio Server catalogue
-    (SRV-3); file import/export (CON-9) stays for desktop-only users.
+Q-2 Shared connection list?
+    DECIDED (2026-10-09, owner): file import/export (CON-9) now; a shared
+    central catalogue comes with Studio Server (SRV-3, v1.1).
 Q-3 Is DataStax Enterprise or ScyllaDB support ever needed?
+    DECIDED (2026-10-09, owner): no - Apache Cassandra only for now.
 Q-4 Licence of the tool itself: internal-only, or open source?
+    DECIDED (2026-10-09, owner): internal / proprietary for now (private
+    repository); open-sourcing can be decided later.
 Q-5 Is Studio Server in scope for v1.0, or desktop-only first?
-    The plan assumes it ships in v1.1 (scheduled repair, backup, alerts).
+    DECIDED (2026-10-09, owner): desktop-only v1.0; Studio Server in v1.1
+    (scheduled repair, backup, alerts, shared catalogue).
 Q-6 Is a Reaper or Medusa deployment already running anywhere in the
     estate, or are the estate scripts and systemd timers the only ones?
+    DECIDED (2026-10-09, owner): it can be anything, and differs per cluster:
+    Cassandra Reaper, Medusa, or custom scripts on the nodes. Repair and
+    backup therefore use pluggable providers chosen (or auto-detected) per
+    cluster - see REP-6, REP-7, BAK-1, BAK-8.
 
 
 --------------------------------------------------------------------------------

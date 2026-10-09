@@ -42,6 +42,8 @@ Updated: 2026-10-08. Requirement IDs refer to [`requirement.txt`](../requirement
 
 ## Waiting on the owner
 
-1. Decisions Q-2 … Q-6 (requirement.txt §6). Q-1 decided: no access control for now.
+1. ~~Decisions Q-1 … Q-6~~ All decided 2026-10-09 (requirement.txt §6): no access control; file
+   import/export now, shared catalogue in v1.1; Apache Cassandra only; internal licence; desktop-only
+   v1.0; repair/backup via pluggable providers (Reaper, Medusa or custom node scripts, per cluster).
 2. Code-signing: Apple Developer ID and a Windows code-signing certificate.
 3. A non-prod cluster from the estate for a pilot (CQL and SSH access).
