@@ -87,6 +87,8 @@ services:
   east2-ssh: { <<: *sshd, network_mode: "service:east2", volumes_from: ["east2:ro"] }
   west1-ssh: { <<: *sshd, network_mode: "service:west1", volumes_from: ["west1:ro"] }
   # 5.0 node: SSH reachable only through the bastion (secure50:2222), like a node with no public SSH.
+  # 3.11 node: SSH on 127.0.0.1:2204 (the node advertises 0.0.0.0, so its connection uses port 2204).
+  legacy311-ssh: { <<: *sshd, network_mode: "service:legacy311", volumes_from: ["legacy311:ro"] }
   secure50-ssh: { <<: *sshd, network_mode: "service:secure50", volumes_from: ["secure50:ro"], profiles: [secure] }
   bastion:
     <<: *sshd
@@ -109,7 +111,7 @@ services:
         -Dcassandra.skip_wait_for_gossip_to_settle=0 -Dcassandra.ring_delay_ms=1000
         -Dcassandra.jmx.remote.port=27199 -Dcom.sun.management.jmxremote.rmi.port=27199
         -Dcom.sun.management.jmxremote.authenticate=false -Djava.rmi.server.hostname=127.0.0.1
-    ports: ["29042:9042", "27199:27199"]
+    ports: ["29042:9042", "27199:27199", "2204:2222"]
     healthcheck:
       test: ["CMD-SHELL", "nodetool -p 27199 statusbinary 2>/dev/null | grep -qx running"]
       interval: 10s
