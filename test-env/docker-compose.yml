@@ -16,6 +16,9 @@
 #   legacy-311 serves remote JMX without auth on 127.0.0.1:27199 (DIRECT method; always on, no profile).
 
 x-cassandra: &cassandra
+  # The logs directory as a volume, so the sshd sidecars (volumes_from) can read system.log over SSH
+  # (diagnostics: tombstone / large-partition warnings; Studio log path /opt/cassandra/logs/system.log).
+  volumes: ["/opt/cassandra/logs"]
   environment: &env
     MAX_HEAP_SIZE: 512M
     HEAP_NEWSIZE: 100M
@@ -72,8 +75,8 @@ services:
     ports: ["2203:2222"]
     depends_on: { east1: { condition: service_healthy } }
 
-  # sshd sidecars (profile jmx): inside each node's network namespace, with its data volume read-only
-  # so df over SSH sees the node's disk;, so their port 2222 is published
+  # sshd sidecars (profile jmx): inside each node's network namespace, with its data and logs volumes
+  # read-only so df and system.log over SSH see the node's disk and logs;, so their port 2222 is published
   # on the node service above and "localhost:7199" is the node's JMX.
   east1-ssh: { <<: *sshd, network_mode: "service:east1", volumes_from: ["east1:ro"] }
   east2-ssh: { <<: *sshd, network_mode: "service:east2", volumes_from: ["east2:ro"] }
@@ -117,7 +120,7 @@ services:
     profiles: [secure]
     environment: { <<: *env, CASSANDRA_CLUSTER_NAME: secure-50, CASSANDRA_DC: dc1 }
     ports: ["39042:9042"]
-    volumes: ["./certs/node.jks:/certs/node.jks:ro"]
+    volumes: ["./certs/node.jks:/certs/node.jks:ro", "/opt/cassandra/logs"]
     # Same edits as SecureClusterIntegrationTest: PasswordAuthenticator, CassandraAuthorizer, client TLS.
     entrypoint:
       - bash
