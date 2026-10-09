@@ -3,6 +3,7 @@
 // Usage: node tests/smoke.mjs <engineUrl> <token> <screenshotDir>
 // Expects a multi-DC cluster (dc_east + dc_west) at MULTI_DC (default 127.0.0.1:19042)
 // and Cassandra 3.11 at LEGACY (default 127.0.0.1:29042). test-env/ starts both.
+// Monitoring reaches the 4.1 nodes' JMX over SSH (test-env profile "jmx", key test-env/ssh/id_test).
 import { chromium } from "@playwright/test";
 import fs from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
@@ -25,9 +26,12 @@ for (const f of await api("GET", "/api/folders")) if (!f.parentId) await api("DE
 const acme = await api("POST", "/api/folders", { name: "acme" });
 const prod = await api("POST", "/api/folders", { name: "prod", parentId: acme.id });
 const nonprod = await api("POST", "/api/folders", { name: "nonprod", parentId: acme.id });
+const sshKey = process.env.SSH_KEY ?? new URL("../../test-env/ssh/id_test", import.meta.url).pathname;
 const prodConn = await api("POST", "/api/connections", { connection: {
   name: "acme-core-prod", folderId: prod.id, environment: "PROD", contactPoints: [process.env.MULTI_DC ?? "127.0.0.1:19042"],
-  localDatacenter: "dc_east", defaultConsistency: "LOCAL_QUORUM", tags: ["core", "multi-dc"] } });
+  localDatacenter: "dc_east", defaultConsistency: "LOCAL_QUORUM", tags: ["core", "multi-dc"],
+  jmx: { method: "SSH_TUNNEL", port: 7199 },
+  ssh: { username: "studio", port: 2222, auth: "KEY", keyPath: sshKey, strictHostKeyChecking: false } } });
 await api("POST", "/api/connections", { connection: {
   name: "legacy-311", folderId: nonprod.id, environment: "DEV", contactPoints: [process.env.LEGACY ?? "127.0.0.1:29042"], tags: ["3.11"] } });
 
@@ -221,6 +225,28 @@ await page.getByRole("button", { name: "Overview" }).last().click();
 await page.getByText("3.11").first().waitFor();
 step("3.11 overview");
 await shot("07-legacy-311");
+
+// Monitoring (Phase 2): live JMX from all three 4.1 nodes through per-node SSH tunnels.
+await page.getByTestId("conn-acme-core-prod").dblclick();
+await visible(page.getByRole("button", { name: "Monitoring", exact: true })).click();
+await visible(page.getByTestId("monitoring-health-badge")).waitFor({ timeout: 60_000 });
+if (await visible(page.getByTestId("monitoring-demo")).count()) throw new Error("monitoring shows demo data, not the engine's");
+step("monitoring health: " + (await visible(page.getByTestId("monitoring-health-badge")).textContent()));
+await shot("08-monitoring-health");
+await a11y("monitoring health");
+await visible(page.getByRole("tab", { name: "Nodes", exact: true })).click();
+const nodesTable = visible(page.getByTestId("monitoring-nodes-table"));
+await nodesTable.waitFor();
+// Every node UN with its heap read over JMX (cells, not row text: cell texts run together).
+await nodesTable.locator("tbody tr").filter({ has: page.getByRole("cell", { name: "UN", exact: true }) })
+  .filter({ hasText: "MiB /" }).nth(2).waitFor({ timeout: 60_000 });
+step("monitoring nodes: 3 x UN with heap read over JMX");
+await shot("09-monitoring-nodes");
+await a11y("monitoring nodes");
+await visible(page.getByRole("tab", { name: "Ring", exact: true })).click();
+await visible(page.getByTestId("monitoring-ring-dc_west")).waitFor();
+step("monitoring ring per DC");
+await shot("10-monitoring-ring");
 
 await browser.close();
 console.log(a11yProblems.length ? "ACCESSIBILITY:\n" + a11yProblems.join("\n") : "accessibility: no WCAG A/AA violations");

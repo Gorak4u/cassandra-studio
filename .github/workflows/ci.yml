@@ -103,16 +103,19 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: npm, cache-dependency-path: ui/package-lock.json }
       # Clusters boot in the background while the engine and UI build.
-      - name: Start test-env (2-DC 4.1 cluster, 3.11, and 5.0 with TLS + login)
+      - name: Start test-env (2-DC 4.1 cluster with SSH sidecars, 3.11, and 5.0 with TLS + login)
         run: |
           test-env/make-certs.sh
-          docker compose -f test-env/docker-compose.yml --profile secure up -d
+          docker compose -f test-env/docker-compose.yml --profile secure --profile jmx up -d
       - name: Build engine and UI
         run: |
           (cd engine && ./gradlew --no-daemon -q shadowJar)
           (cd ui && npm ci --no-audit --no-fund && npm run build && npx playwright install --with-deps chromium)
       - name: Wait for every node to be up
-        run: test-env/wait-ready.sh 300
+        run: PROFILES="secure jmx" test-env/wait-ready.sh 300
+      - name: JMX access over SSH tunnels, bastion and direct JMX
+        working-directory: engine
+        run: ./gradlew --no-daemon test -Pintegration --tests '*JmxAccessIntegrationTest'
       - name: Start engine
         run: |
           java -jar engine/build/libs/cassandra-studio-engine-all.jar --port 18080 --token e2e --data-dir "$RUNNER_TEMP/studio" \
@@ -132,8 +135,8 @@ jobs:
         if: failure()
         run: |
           cat "$RUNNER_TEMP/engine.log" || true
-          docker compose -f test-env/docker-compose.yml --profile secure ps
-          docker compose -f test-env/docker-compose.yml --profile secure logs --tail 50
+          docker compose -f test-env/docker-compose.yml --profile secure --profile jmx ps
+          docker compose -f test-env/docker-compose.yml --profile secure --profile jmx logs --tail 50
 
   desktop:
     name: Desktop window (Electron)

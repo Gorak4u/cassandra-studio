@@ -45,6 +45,8 @@
 .mon-row-warn td { background: var(--warn-bg); }
 .mon-ellipsis { display: inline-block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
 .mon-node-link { padding: 0; display: inline-flex; align-items: center; gap: 5px; }
+/* 12px links on the grey panel background: blend towards the text colour to keep 4.5:1 contrast in both themes. */
+.btn.link.mon-node-link { color: color-mix(in srgb, var(--accent) 75%, var(--text)); }
 .mon-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
 
 /* usage bars */

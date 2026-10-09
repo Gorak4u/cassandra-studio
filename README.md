@@ -85,11 +85,13 @@ and the Release workflow publishes the installers.
 ## Test clusters
 
 `test-env/` starts the clusters the tests use: a 2-DC Cassandra 4.1 cluster (127.0.0.1:19042),
-Cassandra 3.11 (29042) and, with `--profile secure`, Cassandra 5.0 with TLS and login (39042,
-user `cassandra` / `cassandra`, truststore `test-env/certs/node.pem`).
+Cassandra 3.11 (29042, JMX without auth on 27199) and, with `--profile secure`, Cassandra 5.0 with
+TLS and login (39042, user `cassandra` / `cassandra`, truststore `test-env/certs/node.pem`).
+`--profile jmx` adds an sshd next to each 4.1 node (127.0.0.1:2201-2203) and a bastion (2200) for
+monitoring over SSH tunnels: user `studio`, key `test-env/ssh/id_test`, port 2222 from inside the network.
 
 ```bash
-cd test-env && ./make-certs.sh && ./wait-ready.sh
+cd test-env && ./make-certs.sh && PROFILES="secure jmx" ./wait-ready.sh
 ```
 
 ## Tests
