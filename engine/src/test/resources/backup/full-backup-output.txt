@@ -1,0 +1,38 @@
+[2026-10-09 13:15:06] [0;34mVerifying local credentials...[0m
+[2026-10-09 13:15:06] [0;32mlocal credentials are valid.[0m
+[2026-10-09 13:15:06] [0;34mChecking if container '/tmp/claude-0/-home-user/3edb5ea5-7196-50f3-af13-71922488796e/scratchpad/stubtest/bucket/' exists...[0m
+[2026-10-09 13:15:06] [0;32mContainer already exists.[0m
+[2026-10-09 13:15:06] [0;34mApplying lifecycle expiry of 14 days to 'acme-test-core-backups'...[0m
+[2026-10-09 13:15:06] [0;32mLifecycle policy applied.[0m
+[2026-10-09 13:15:06] [0;34mSnapshot retention is not configured to a positive number (0). Skipping old snapshot cleanup.[0m
+[2026-10-09 13:15:06] [0;34m--- Starting Granular Cassandra Snapshot Backup Process ---[0m
+[2026-10-09 13:15:06] [0;34mS3 Bucket: acme-test-core-backups[0m
+[2026-10-09 13:15:06] [0;34mBackup Timestamp (Tag): 2026-10-09-13-15-06[0m
+[2026-10-09 13:15:06] [0;34mStreaming Mode: false[0m
+[2026-10-09 13:15:06] [0;34mParallelism: 2[0m
+[2026-10-09 13:15:06] [0;34mTaking full snapshot with tag: 2026-10-09-13-15-06...[0m
+[2026-10-09 13:15:06] [0;32mFull snapshot taken successfully.[0m
+[2026-10-09 13:15:06] [0;34mDiscovering keyspaces and tables to back up...[0m
+[2026-10-09 13:15:07] [0;34mSchema-to-directory mapping generated.[0m
+[2026-10-09 13:15:07] [0;34m--- Pre-scanning for keyspaces to skip ---[0m
+[2026-10-09 13:15:07] [0;34mSkipping non-essential system keyspace backup: system[0m
+[2026-10-09 13:15:07] [0;34m--- Starting Parallel Backup of Tables ---[0m
+[2026-10-09 13:15:07] [0;34mBacking up table: system_schema.tables[0m
+[2026-10-09 13:15:07] [0;34mBacking up table: shop.orders[0m
+[2026-10-09 13:15:07] [0;32mSuccessfully uploaded backup for shop.orders[0m
+[2026-10-09 13:15:07] [0;32mSuccessfully uploaded backup for system_schema.tables[0m
+[2026-10-09 13:15:07] [0;34mBacking up table: shop.items[0m
+[2026-10-09 13:15:07] [0;32mSuccessfully uploaded backup for shop.items[0m
+[2026-10-09 13:15:07] [0;34m--- Finished Parallel Backup of Tables ---[0m
+[2026-10-09 13:15:07] [0;34m1 table snapshot(s) were skipped (system keyspaces or include/exclude filters).[0m
+[2026-10-09 13:15:07] [0;34mDumping cluster schema to /tmp/claude-0/-home-user/3edb5ea5-7196-50f3-af13-71922488796e/scratchpad/stubtest/backup_temp_7218/schema.cql...[0m
+[2026-10-09 13:15:07] [1;33mFailed to dump schema. The backup will be incomplete for schema-only restores.[0m
+[2026-10-09 13:15:07] [0;34mCreating backup manifest at /tmp/claude-0/-home-user/3edb5ea5-7196-50f3-af13-71922488796e/scratchpad/stubtest/backup_temp_7218/backup_manifest.json...[0m
+[2026-10-09 13:15:07] [0;32mManifest created successfully.[0m
+[2026-10-09 13:15:07] [0;34mUploading manifest file...[0m
+[2026-10-09 13:15:07] [0;32mManifest uploaded successfully.[0m
+[2026-10-09 13:15:07] [0;34mUploading schema mapping file...[0m
+[2026-10-09 13:15:07] [0;32mSchema mapping file uploaded successfully.[0m
+[2026-10-09 13:15:07] [0;32m--- Granular Cassandra Backup Process Finished Successfully ---[0m
+[2026-10-09 13:15:07] [0;32mSummary: all 3 table(s) selected for backup were uploaded to /tmp/claude-0/-home-user/3edb5ea5-7196-50f3-af13-71922488796e/scratchpad/stubtest/bucket/vm/2026-10-09-13-15-06 (4 snapshot(s) found, 1 skipped).[0m
+[2026-10-09 13:15:07] [0;34mCleaning up temporary directory: /tmp/claude-0/-home-user/3edb5ea5-7196-50f3-af13-71922488796e/scratchpad/stubtest/backup_temp_7218[0m

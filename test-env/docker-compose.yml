@@ -43,6 +43,11 @@ x-sshd: &sshd
     - ./ssh/id_test.pub:/keys/id_test.pub:ro
     - ./ssh/host_ed25519_key:/keys/host_ed25519_key:ro
     - ./ssh/host_ed25519_key.pub:/keys/host_ed25519_key.pub:ro
+    # Estate backup scripts stub (estate-stub/: same paths, CLI and output as the control repo's
+    # scripts) and one shared "bucket" (local backend) for all nodes, like an S3 bucket.
+    - ./estate-stub/usr/local/bin:/usr/local/bin:ro
+    - ./estate-stub/etc/backup:/etc/backup:ro
+    - estate-backups:/var/backups/cassandra
 
 services:
   east1:
@@ -138,3 +143,7 @@ networks:
   default:
     ipam:
       config: [{ subnet: 10.231.42.0/24, ip_range: 10.231.42.128/25 }]
+
+# The estate-stub backup "bucket" shared by the sshd sidecars (see x-sshd).
+volumes:
+  estate-backups: {}

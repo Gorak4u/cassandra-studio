@@ -1,0 +1,19 @@
+/* Backups tab (Track 5). Only theme variables from styles/app.css, so light and dark both work. */
+.backup-panel { display: flex; flex-direction: column; gap: 12px; overflow: auto; height: 100%; box-sizing: border-box; }
+.backup-section { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; background: var(--panel); }
+.backup-section > summary { cursor: pointer; display: flex; align-items: baseline; gap: 10px; }
+.backup-section > summary h3, .backup-section h3 { display: inline; margin: 0; font-size: 14px; }
+.backup-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
+.backup-form { display: flex; flex-direction: column; gap: 6px; border: none; padding: 0; margin: 8px 0; }
+.backup-form legend { font-weight: 600; margin-bottom: 4px; }
+.backup-form label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); max-width: 420px; }
+.backup-form label input, .backup-form label select { color: var(--text); }
+.backup-form .backup-radio { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
+.backup-inline { flex-direction: row; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.backup-table-wrap { overflow-x: auto; }
+.backup-loc { max-width: 280px; word-break: break-all; font-family: var(--mono, monospace); font-size: 12px; }
+.backup-cmd code { font-size: 11px; word-break: break-all; }
+.backup-nodes { margin-top: 8px; }
+.backup-panel .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.backup-panel td:first-child, .backup-panel td code { white-space: nowrap; }

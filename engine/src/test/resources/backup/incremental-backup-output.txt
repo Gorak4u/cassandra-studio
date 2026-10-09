@@ -1,0 +1,14 @@
+[2026-10-09 13:15:08] [0;34m--- Starting Incremental Backup Manager (Mode: default) ---[0m
+[2026-10-09 13:15:08] [0;34m--- Step 1: Creating Local Incremental Backup ---[0m
+[2026-10-09 13:15:08] [0;34mArchiving incremental files from source directories...[0m
+[2026-10-09 13:15:08] [0;34mProcessing incremental backup for: shop.items[0m
+[2026-10-09 13:15:08] [0;34mCreating backup manifest...[0m
+[2026-10-09 13:15:08] [0;32m--- Local Backup Finished. Stored at /tmp/local_backups/2026-10-09-13-15-08 ---[0m
+[2026-10-09 13:15:08] [0;34m--- Step 2: Uploading Local Backup to S3 ---[0m
+[2026-10-09 13:15:08] [0;34mUploading all backup files to /tmp/claude-0/-home-user/3edb5ea5-7196-50f3-af13-71922488796e/scratchpad/stubtest/bucket/vm/2026-10-09-13-15-08...[0m
+[2026-10-09 13:15:08] [0;32m--- Upload Finished Successfully ---[0m
+[2026-10-09 13:15:08] [0;34m--- Step 3: Cleaning Up Source & Local Files ---[0m
+[2026-10-09 13:15:08] [1;33mSource incremental files are on a read-only volume in this test environment; leaving them in place.[0m
+[2026-10-09 13:15:08] [0;34mRemoving local backup staging directory: /tmp/local_backups/2026-10-09-13-15-08[0m
+[2026-10-09 13:15:08] [0;32m--- Cleanup Finished ---[0m
+[2026-10-09 13:15:08] [0;34m--- Incremental Backup Process Finished ---[0m

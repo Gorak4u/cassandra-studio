@@ -1,0 +1,12 @@
+[2026-10-09 13:15:09] [0;34m--- Starting Point-in-Time Restore Manager ---[0m
+[2026-10-09 13:15:09] [0;34mMode: list[0m
+[2026-10-09 13:15:09] [0;34mTarget S3 Bucket: acme-test-core-backups[0m
+[2026-10-09 13:15:09] [0;34mSource Hostname for Restore: vm[0m
+[2026-10-09 13:15:09] [0;34m--- Listing Available Backups for Host: vm ---[0m
+
+[1m[0;32mHost: vm[0m
+[1;33m----------------------------[0m
+  - [1m2026-10-08-02-00[0m (type: [0munknown[0m)
+  - [1m2026-10-09-13-15-06[0m (type: [0;36mfull[0m)
+  - [1m2026-10-09-13-15-08[0m (type: [0;34mincremental[0m)
+

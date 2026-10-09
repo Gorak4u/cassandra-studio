@@ -95,6 +95,12 @@ public final class SshConnection implements AutoCloseable {
             if (events.contains(ClientChannelEvent.TIMEOUT)) {
                 throw new SshAccessException("'" + command + "' did not finish within " + timeout.toSeconds() + " s", null);
             }
+            // Exit status comes before the server's EOF/CLOSE: wait for those too, so all output is read and the
+            // channel is released on the server (closing it early leaked it, and OpenSSH refuses new channels
+            // after MaxSessions=10 on a cached session).
+            if (!events.contains(ClientChannelEvent.CLOSED)) {
+                ch.waitFor(EnumSet.of(ClientChannelEvent.CLOSED), Duration.ofSeconds(5));
+            }
             Integer status = ch.getExitStatus();
             if (status != null && status != 0) {
                 String e = err.toString(StandardCharsets.UTF_8).strip();
