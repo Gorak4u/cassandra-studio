@@ -1,0 +1,33 @@
+/* Config panel (CFG-1/2). Colours come from the theme variables, so light and dark both work. */
+.cfg-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.cfg-toolbar { padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
+.cfg-tabs { border-bottom: none; padding: 0; background: none; }
+.cfg-job { padding: 8px 12px 0; }
+.cfg-body { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
+.cfg-pad { padding: 12px; }
+.cfg-filters { gap: 12px; }
+.cfg-filters input[type="search"] { min-width: 240px; }
+.cfg-scope { border: none; margin: 0; padding: 0; display: flex; gap: 10px; align-items: center; }
+.cfg-scope legend { float: left; padding: 0 6px 0 0; }
+.cfg-summary { gap: 10px; }
+.cfg-notices ul { margin: 6px 0 0; padding-left: 18px; }
+.cfg-scroll { overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.cfg-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.cfg-table th, .cfg-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top;
+  font-family: var(--mono); white-space: nowrap; max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
+.cfg-table thead th { position: sticky; top: 0; background: var(--panel-2); font-family: inherit; z-index: 1; }
+.cfg-table tbody th { font-weight: 500; }
+.cfg-sub { font-size: 11px; font-weight: normal; }
+.cfg-table tr.cfg-diff > * { background: var(--warn-bg); }
+.cfg-table td.cfg-odd { font-weight: 700; color: var(--warn); }
+.cfg-table td.cfg-off { color: var(--danger); font-weight: 700; text-decoration: underline dotted; }
+.cfg-status { font-family: inherit !important; color: var(--text); white-space: normal !important; min-width: 160px; }
+.cfg-cat { display: inline-block; min-width: 54px; font-size: 10px; font-family: inherit; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; margin-right: 4px; text-align: center; }
+.cfg-hiera { max-width: 1000px; }
+.cfg-hiera p { margin: 0; }
+.cfg-grow { flex: 1; min-width: 300px; }
+.cfg-certs { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px 12px; }
+.cfg-certs legend { color: var(--muted); font-size: 12px; padding: 0 4px; }
+.cfg-panel .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 900px) { .cfg-hiera .grid3 { grid-template-columns: 1fr; } }
