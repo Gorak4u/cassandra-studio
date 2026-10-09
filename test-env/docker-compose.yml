@@ -46,12 +46,14 @@ services:
     <<: *cassandra
     image: cassandra:4.1
     hostname: east1
+    networks: { default: { ipv4_address: 10.231.42.11 } }
     environment: { <<: *env, CASSANDRA_CLUSTER_NAME: acme-core, CASSANDRA_SEEDS: east1, CASSANDRA_NUM_TOKENS: "16", CASSANDRA_DC: dc_east, CASSANDRA_RACK: rack1 }
     ports: ["19042:9042", "2201:2222"]
   east2:
     <<: *cassandra
     image: cassandra:4.1
     hostname: east2
+    networks: { default: { ipv4_address: 10.231.42.12 } }
     # Empty test node: join without bootstrap streaming. Parallel bootstraps could stall a node in JOINING
     # for minutes (seen in CI); with nothing to stream, auto_bootstrap: false is safe and joins in seconds.
     entrypoint: ["bash", "-c", "grep -q '^auto_bootstrap:' /etc/cassandra/cassandra.yaml || echo 'auto_bootstrap: false' >> /etc/cassandra/cassandra.yaml; exec docker-entrypoint.sh cassandra -f"]
@@ -62,6 +64,7 @@ services:
     <<: *cassandra
     image: cassandra:4.1
     hostname: west1
+    networks: { default: { ipv4_address: 10.231.42.13 } }
     # Empty test node: join without bootstrap streaming. Parallel bootstraps could stall a node in JOINING
     # for minutes (seen in CI); with nothing to stream, auto_bootstrap: false is safe and joins in seconds.
     entrypoint: ["bash", "-c", "grep -q '^auto_bootstrap:' /etc/cassandra/cassandra.yaml || echo 'auto_bootstrap: false' >> /etc/cassandra/cassandra.yaml; exec docker-entrypoint.sh cassandra -f"]
@@ -85,6 +88,7 @@ services:
     <<: *cassandra
     image: cassandra:3.11
     hostname: legacy311
+    networks: { default: { ipv4_address: 10.231.42.21 } }
     # Remote JMX without auth on 27199 (same port inside and on the host, and stubs name 127.0.0.1),
     # so the host reaches it with plain JMX/RMI: the DIRECT access method.
     environment:
@@ -108,6 +112,7 @@ services:
     <<: *cassandra
     image: cassandra:5.0
     hostname: secure50
+    networks: { default: { ipv4_address: 10.231.42.31 } }
     profiles: [secure]
     environment: { <<: *env, CASSANDRA_CLUSTER_NAME: secure-50, CASSANDRA_DC: dc1 }
     ports: ["39042:9042"]
@@ -121,3 +126,11 @@ services:
         sed -i 's/AllowAllAuthenticator/PasswordAuthenticator/; s/AllowAllAuthorizer/CassandraAuthorizer/' $$CONF &&
         sed -i '/^client_encryption_options:/,/^[a-z]/ { s/^\(\s*\)enabled: false/\1enabled: true/; s#^\(\s*\)keystore: .*#\1keystore: /certs/node.jks#; s/^\(\s*\)#\{0,1\}keystore_password: .*/\1keystore_password: changeit/ }' $$CONF &&
         exec docker-entrypoint.sh cassandra -f
+
+# Fixed node addresses: Cassandra keeps its peers' IPs on disk, so a node that comes back with another
+# node's old address (Docker hands out IPs in start order) refuses to rejoin. Other containers take
+# addresses from the upper half only.
+networks:
+  default:
+    ipam:
+      config: [{ subnet: 10.231.42.0/24, ip_range: 10.231.42.128/25 }]
