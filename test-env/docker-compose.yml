@@ -74,6 +74,8 @@ services:
   east1-ssh: { <<: *sshd, network_mode: "service:east1" }
   east2-ssh: { <<: *sshd, network_mode: "service:east2" }
   west1-ssh: { <<: *sshd, network_mode: "service:west1" }
+  # 5.0 node: SSH reachable only through the bastion (secure50:2222), like a node with no public SSH.
+  secure50-ssh: { <<: *sshd, network_mode: "service:secure50", profiles: [secure] }
   bastion:
     <<: *sshd
     hostname: bastion
