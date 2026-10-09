@@ -1,0 +1,35 @@
+Java HotSpot(TM) 64-Bit Server VM (25.202-b08) for linux-amd64 JRE (1.8.0_202-b08), built on Dec 15 2018 12:40:22 by "java_re" with gcc 7.3.0
+Memory: 4k page, physical 65842708k(1238124k free), swap 0k(0k free)
+CommandLine flags: -XX:CMSInitiatingOccupancyFraction=75 -XX:InitialHeapSize=8589934592 -XX:MaxHeapSize=8589934592 -XX:MaxNewSize=2147483648 -XX:MaxTenuringThreshold=1 -XX:+PrintGCDateStamps -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintTenuringDistribution -XX:+UseCMSInitiatingOccupancyOnly -XX:+UseConcMarkSweepGC -XX:+UseParNewGC
+2024-03-01T10:00:01.000+0000: 100.000: [GC (Allocation Failure) 2024-03-01T10:00:01.000+0000: 100.000: [ParNew
+Desired survivor size 107347968 bytes, new threshold 1 (max 1)
+- age   1:   52428800 bytes,   52428800 total
+: 1887488K->209664K(1887488K), 0.0812345 secs] 6000000K->4500000K(8178688K), 0.0814000 secs] [Times: user=0.50 sys=0.01, real=0.08 secs]
+2024-03-01T10:00:01.100+0000: 100.100: Total time for which application threads were stopped: 0.0820000 seconds, Stopping threads took: 0.0001000 seconds
+2024-03-01T10:00:05.000+0000: 104.000: [GC (Allocation Failure) 2024-03-01T10:00:05.000+0000: 104.000: [ParNew
+Desired survivor size 107347968 bytes, new threshold 1 (max 1)
+- age   1:   62428800 bytes,   62428800 total
+: 1887488K->209664K(1887488K), 0.6500000 secs] 6178000K->4900000K(8178688K), 0.6510000 secs] [Times: user=3.50 sys=0.01, real=0.65 secs]
+2024-03-01T10:00:05.700+0000: 104.700: [GC (CMS Initial Mark) [1 CMS-initial-mark: 4690336K(6291200K)] 4950000K(8178688K), 0.0200000 secs] [Times: user=0.05 sys=0.00, real=0.02 secs]
+2024-03-01T10:00:05.720+0000: 104.720: [CMS-concurrent-mark-start]
+2024-03-01T10:00:07.000+0000: 106.000: [GC (Allocation Failure) 2024-03-01T10:00:07.000+0000: 106.000: [ParNew2024-03-01T10:00:07.100+0000: 106.100: [CMS-concurrent-mark: 1.200/1.380 secs] [Times: user=4.00 sys=0.10, real=1.38 secs]
+ (promotion failed)
+Desired survivor size 107347968 bytes, new threshold 1 (max 1)
+- age   1:   72428800 bytes,   72428800 total
+: 1887488K->1887488K(1887488K), 0.4000000 secs]2024-03-01T10:00:07.400+0000: 106.400: [CMS2024-03-01T10:00:08.000+0000: 107.000: [CMS-concurrent-preclean: 0.500/0.600 secs] [Times: user=0.60 sys=0.00, real=0.60 secs]
+ (concurrent mode failure): 6100000K->5900000K(6291200K), 6.5000000 secs] 7987488K->5900000K(8178688K), [Metaspace: 45000K->45000K(1089536K)], 6.9000000 secs] [Times: user=7.00 sys=0.10, real=6.90 secs]
+2024-03-01T10:00:13.900+0000: 112.900: Total time for which application threads were stopped: 6.9100000 seconds, Stopping threads took: 0.2500000 seconds
+2024-03-01T10:00:20.000+0000: 119.000: [Full GC (Metadata GC Threshold) 2024-03-01T10:00:20.000+0000: 119.000: [CMS: 5900000K->5800000K(6291200K), 2.1000000 secs] 6500000K->5800000K(8178688K), [Metaspace: 262000K->262000K(1290240K)], 2.1000000 secs] [Times: user=2.10 sys=0.00, real=2.10 secs]
+2024-03-01T10:00:30.000+0000: 129.000: [GC (CMS Initial Mark) [1 CMS-initial-mark: 5800000K(6291200K)] 6000000K(8178688K), 0.0300000 secs] [Times: user=0.05 sys=0.00, real=0.03 secs]
+2024-03-01T10:00:30.030+0000: 129.030: [CMS-concurrent-mark-start]
+2024-03-01T10:00:31.000+0000: 130.000: [CMS-concurrent-mark: 0.900/0.970 secs] [Times: user=3.00 sys=0.10, real=0.97 secs]
+2024-03-01T10:00:31.000+0000: 130.000: [CMS-concurrent-preclean-start]
+2024-03-01T10:00:31.100+0000: 130.100: [CMS-concurrent-preclean: 0.100/0.100 secs] [Times: user=0.10 sys=0.00, real=0.10 secs]
+2024-03-01T10:00:31.100+0000: 130.100: [CMS-concurrent-abortable-preclean-start]
+ CMS: abort preclean due to time 2024-03-01T10:00:36.200+0000: 135.200: [CMS-concurrent-abortable-preclean: 4.000/5.100 secs] [Times: user=4.00 sys=0.10, real=5.10 secs]
+2024-03-01T10:00:36.200+0000: 135.200: [GC (CMS Final Remark) [YG occupancy: 900000 K (1887488 K)]2024-03-01T10:00:36.200+0000: 135.200: [Rescan (parallel) , 0.1000000 secs]2024-03-01T10:00:36.300+0000: 135.300: [weak refs processing, 0.0010000 secs]2024-03-01T10:00:36.301+0000: 135.301: [class unloading, 0.0200000 secs][1 CMS-remark: 5800000K(6291200K)] 6700000K(8178688K), 0.1300000 secs] [Times: user=0.50 sys=0.00, real=0.13 secs]
+2024-03-01T10:00:36.330+0000: 135.330: [CMS-concurrent-sweep-start]
+2024-03-01T10:00:37.330+0000: 136.330: [CMS-concurrent-sweep: 1.000/1.000 secs] [Times: user=1.00 sys=0.00, real=1.00 secs]
+2024-03-01T10:00:37.330+0000: 136.330: [CMS-concurrent-reset-start]
+2024-03-01T10:00:37.350+0000: 136.350: [CMS-concurrent-reset: 0.020/0.020 secs] [Times: user=0.02 sys=0.00, real=0.02 secs]
+2024-03-01T10:01:00.000+0000: 159.000: [Full GC (System.gc()) 2024-03-01T10:01:00.000+0000: 159.000: [CMS: 5700000K->5750000K(6291200K), 3.0000000 secs] 6000000K->5750000K(8178688K), [Metaspace: 262000K->262000K(1290240K)], 3.0000000 secs] [Times: user=3.00 sys=0.00, real=3.00 secs]

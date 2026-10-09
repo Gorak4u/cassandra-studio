@@ -1,0 +1,52 @@
+/* GC logs panel (GCL-1..4). Colours only from the app's CSS variables (light and dark). */
+.gcl { display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow: auto; height: 100%; box-sizing: border-box; }
+.gcl-source-row { display: flex; gap: 20px; flex-wrap: wrap; }
+.gcl-source-col { flex: 1 1 320px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.gcl-inline { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.gcl-inline input[type=number] { width: 90px; }
+.gcl-discovery { display: flex; flex-direction: column; gap: 6px; }
+.gcl-discovery details ul { margin: 4px 0; padding-left: 18px; }
+.gcl-mono { font-family: var(--mono, ui-monospace, monospace); font-size: 12px; word-break: break-all; }
+.gcl-files td, .gcl-files th { font-size: 12px; }
+.gcl-previous ul { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.gcl-previous li { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.gcl-previous li.current > .btn:first-child { font-weight: 700; }
+.gcl-report { display: flex; flex-direction: column; gap: 8px; }
+.gcl-report-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gcl-report-head h3 { margin: 0; font-size: 15px; }
+.gcl-spacer { flex: 1; }
+.gcl-tabs { border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.gcl-view { display: flex; flex-direction: column; gap: 10px; }
+.gcl-hint { font-size: 12px; }
+.gcl-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.gcl-dot.critical { background: var(--danger); }
+.gcl-card .value { font-size: 17px; }
+.gcl-card-sub { font-size: 12px; margin-top: 2px; }
+.gcl-card.bad { border-left: 4px solid var(--danger); }
+.gcl-card.warn { border-left: 4px solid var(--warn); }
+.gcl-findings h3 { margin: 4px 0; font-size: 14px; }
+.gcl-findings > ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.gcl-finding { border: 1px solid var(--border); border-left-width: 5px; border-radius: var(--radius); padding: 8px 10px; background: var(--panel); display: flex; flex-direction: column; gap: 4px; }
+.gcl-finding.critical { border-left-color: var(--danger); }
+.gcl-finding.warning { border-left-color: var(--warn); }
+.gcl-finding.info { border-left-color: var(--accent); }
+.gcl-finding-head { display: flex; gap: 8px; align-items: center; }
+.gcl-sev { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 3px; text-transform: uppercase; }
+.gcl-sev.critical { background: var(--danger-bg); color: var(--danger); }
+.gcl-sev.warning { background: var(--warn-bg); color: var(--warn); }
+.gcl-sev.info { background: var(--panel-2); color: var(--text); }
+.gcl-evidence { margin: 0; padding-left: 18px; }
+.gcl-opt { margin-right: 6px; }
+.gcl-small { font-size: 12px; }
+.gcl-tables { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; align-items: start; }
+.gcl-table-wrap { overflow: auto; max-height: 60vh; }
+.gcl-events td.num, .gcl-events th.num, .gcl-tables td.num, .gcl-tables th.num, .gcl-files .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gcl-row-bad td { background: var(--danger-bg); }
+.gcl-row-warn td { background: var(--warn-bg); }
+.gcl-charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 10px; }
+.gcl-chart:first-child { grid-column: 1 / -1; }
+.gcl-chart h3 { margin: 0 0 4px; }
+.gcl-tabs { display: flex; gap: 2px; }
+.gcl-tab { padding: 3px 10px; border: 1px solid transparent; border-radius: var(--radius); background: none; cursor: pointer; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; font: inherit; }
+.gcl-tab:hover { color: var(--text); }
+.gcl-tab.active { color: var(--text); background: var(--panel-2); border-color: var(--border); font-weight: 600; }
