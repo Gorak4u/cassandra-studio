@@ -166,3 +166,15 @@ table.data tr:hover td { background: var(--panel-2); }
 /* Tree actions appear on hover/focus so names get the full width. */
 .tree-item > .row { display: none; }
 .tree-item:hover > .row, .tree-item:focus-within > .row { display: flex; }
+
+/* Job progress (Phase 3, components/JobProgress.tsx) */
+.job { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: var(--panel); }
+.job-head { display: flex; align-items: center; gap: 8px; }
+.job-title { flex: 1; font-weight: 600; }
+.job-bar { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+.job-bar-fill { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+.job-bar-fill.indeterminate { animation: job-slide 1.2s ease-in-out infinite; }
+@keyframes job-slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .job-bar-fill.indeterminate { animation: none; } }
+.job-error { color: var(--danger); }
+.job-log pre { max-height: 240px; overflow: auto; font-size: 12px; margin: 4px 0 0; }

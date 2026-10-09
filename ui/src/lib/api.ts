@@ -54,7 +54,8 @@ function base(): string {
   return (import.meta.env.VITE_ENGINE_URL as string | undefined) ?? "";
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+/** Authenticated JSON call to the engine; throws ApiError (with 428 confirmation details). */
+export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const token = sessionStorage.getItem(TOKEN_KEY);
   const res = await fetch(base() + path, {
     method,

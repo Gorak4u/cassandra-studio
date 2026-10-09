@@ -8,8 +8,15 @@ import { SchemaPanel } from "./SchemaPanel";
 import { RolesPanel } from "./RolesPanel";
 import { HistoryPanel } from "./HistoryPanel";
 import { MonitoringPanel } from "./monitoring/MonitoringPanel";
+import { OperationsPanel } from "./ops/OperationsPanel";
+import { DiagnosticsPanel } from "./diag/DiagnosticsPanel";
+import { GcLogPanel } from "./gclog/GcLogPanel";
+import { ConfigPanel } from "./config/ConfigPanel";
+import { BackupPanel } from "./backup/BackupPanel";
+import { BulkPanel } from "./bulk/BulkPanel";
 
-type Tab = "overview" | "monitoring" | "query" | "schema" | "roles" | "history";
+type Tab = "overview" | "monitoring" | "query" | "schema" | "roles" | "history"
+  | "operations" | "diagnostics" | "gclogs" | "config" | "backups" | "bulk";
 
 /** One open cluster: its tabs share the connection and cluster info (CON-11). */
 export function Workspace(props: { conn: ConnectionConfig; dark: boolean; onConnected: (id: string, ok: boolean) => void }) {
@@ -42,7 +49,7 @@ export function Workspace(props: { conn: ConnectionConfig; dark: boolean; onConn
   };
 
   const tabs: [Tab, string][] = [
-    ["overview", "Overview"], ["monitoring", "Monitoring"], ["query", "Query"], ["schema", "Schema"], ["roles", "Users & roles"], ["history", "History"],
+    ["overview", "Overview"], ["monitoring", "Monitoring"], ["query", "Query"], ["schema", "Schema"], ["roles", "Users & roles"], ["operations", "Operations"], ["diagnostics", "Diagnostics"], ["gclogs", "GC logs"], ["config", "Config"], ["backups", "Backups"], ["bulk", "Bulk"], ["history", "History"],
   ];
 
   return (
@@ -75,6 +82,12 @@ export function Workspace(props: { conn: ConnectionConfig; dark: boolean; onConn
             {tab === "monitoring" && <MonitoringPanel conn={props.conn} info={info} dark={props.dark} />}
             {tab === "schema" && <SchemaPanel conn={props.conn} onOpenInEditor={openInEditor} />}
             {tab === "roles" && <RolesPanel conn={props.conn} />}
+            {tab === "operations" && <OperationsPanel conn={props.conn} info={info} dark={props.dark} />}
+            {tab === "diagnostics" && <DiagnosticsPanel conn={props.conn} info={info} dark={props.dark} />}
+            {tab === "gclogs" && <GcLogPanel conn={props.conn} info={info} dark={props.dark} />}
+            {tab === "config" && <ConfigPanel conn={props.conn} info={info} dark={props.dark} />}
+            {tab === "backups" && <BackupPanel conn={props.conn} info={info} dark={props.dark} />}
+            {tab === "bulk" && <BulkPanel conn={props.conn} info={info} dark={props.dark} />}
             {tab === "history" && <HistoryPanel conn={props.conn} onOpenInEditor={openInEditor} />}
           </>
         )}

@@ -80,7 +80,12 @@ public final class SshConnection implements AutoCloseable {
      * {@link SshAccessException} on a non-zero exit, a timeout or a closed session.
      */
     public String exec(String command, Duration timeout) {
-        ByteArrayOutputStream out = new LimitedOutput(MAX_EXEC_OUTPUT);
+        return exec(command, timeout, MAX_EXEC_OUTPUT);
+    }
+
+    /** {@link #exec(String, Duration)} keeping up to {@code maxBytes} of output (e.g. a GC log file). */
+    public String exec(String command, Duration timeout, int maxBytes) {
+        ByteArrayOutputStream out = new LimitedOutput(maxBytes);
         ByteArrayOutputStream err = new LimitedOutput(4096);
         try (ChannelExec ch = session.createExecChannel(command)) {
             ch.setOut(out);

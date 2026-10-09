@@ -198,6 +198,15 @@ public final class EngineServer implements AutoCloseable {
         // monitoring (Phase 2, docs/api/monitoring.md)
         MonitoringRoutes.register(app, engine.monitoring);
 
+        // Phase 3 (docs/api/jobs.md and one routes class per feature)
+        JobRoutes.register(app, engine.jobs);
+        OpsRoutes.register(app, engine);
+        DiagRoutes.register(app, engine);
+        GcLogRoutes.register(app, engine);
+        ConfigRoutes.register(app, engine);
+        BackupRoutes.register(app, engine);
+        BulkRoutes.register(app, engine);
+
         // cluster (CON-5)
         app.get("/api/clusters/{id}/info", ctx -> ctx.json(engine.clusters.info(ctx.pathParam("id"))));
 
