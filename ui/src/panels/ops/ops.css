@@ -1,0 +1,51 @@
+/* Operations panel. Colours come only from the theme variables in styles/app.css. */
+.ops { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.ops-bar-top { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-bottom: 1px solid var(--border); background: var(--panel); flex-wrap: wrap; flex-shrink: 0; }
+.ops-subtabs { display: flex; gap: 2px; }
+.ops-subtab { padding: 3px 10px; border: 1px solid transparent; border-radius: var(--radius); background: none; cursor: pointer; color: var(--muted); }
+.ops-subtab:hover { color: var(--text); }
+.ops-subtab.active { color: var(--text); background: var(--panel-2); border-color: var(--border); font-weight: 600; }
+.ops-banner { margin: 6px 8px 0; flex-shrink: 0; }
+.ops-main { flex: 1; min-height: 0; display: flex; }
+.ops-nodes { width: 250px; flex-shrink: 0; border-right: 1px solid var(--border); padding: 8px; overflow: auto; background: var(--panel); }
+.ops-nodes-head { margin-bottom: 4px; }
+.ops-dc { border: 1px solid var(--border); border-radius: var(--radius); margin: 0 0 8px; padding: 4px 8px 6px; }
+.ops-dc legend { font-weight: 600; padding: 0 4px; }
+.ops-node { display: flex; align-items: center; gap: 6px; padding: 2px 0; flex-wrap: wrap; cursor: pointer; }
+.ops-node-meta { font-size: 11px; width: 100%; padding-left: 22px; }
+.ops-body { flex: 1; min-width: 0; overflow: auto; }
+.ops-tab { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; }
+.ops-form { gap: 8px 12px; align-items: flex-end; }
+.ops-form-grid { display: flex; flex-direction: column; gap: 8px; max-width: 900px; }
+.ops-field { display: inline-flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.ops-field > span { color: var(--muted); }
+.ops-form-grid > .ops-field { align-self: flex-start; min-width: 260px; }
+.ops-wide textarea { width: 100%; font-family: var(--mono); }
+.ops-help { font-size: 12px; }
+.ops-check { display: inline-flex; align-items: center; gap: 4px; margin-right: 12px; cursor: pointer; }
+.ops-tables, .ops-radios { border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 8px 6px; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 0; align-items: flex-end; }
+.ops-tables .ops-field { margin-right: 12px; }
+.ops-options { gap: 8px 4px; align-items: flex-end; }
+.ops-job { max-width: 900px; }
+.ops-result { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; background: var(--panel); }
+.ops-result-head { margin-bottom: 4px; }
+.ops-cmd { font-family: var(--mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.ops-section h4 { margin: 8px 0 4px; font-size: 13px; }
+.ops-table-wrap { overflow: auto; max-width: 100%; max-height: 520px; }
+.ops-table { font-size: 12px; }
+.ops-table th, .ops-table td { white-space: nowrap; }
+.ops-table th.num, .ops-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.ops-table.kv { width: auto; }
+.ops-table.kv th[scope="row"] { color: var(--muted); font-weight: 600; position: static; background: none; }
+.ops-note { font-size: 12px; margin-top: 4px; }
+.ops-details summary { cursor: pointer; margin: 6px 0; }
+.ops-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+/* The global dark theme keeps white text on the lighter dark-mode accent (about 3.3:1); dark text passes AA. */
+:root[data-theme="dark"] .ops .btn.primary { color: var(--bg); }
+/* Job logs open in full here: a scrolling <pre> is not keyboard-reachable (axe scrollable-region-focusable). */
+.ops-job .job-log pre { max-height: none; overflow: visible; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ops-table-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (max-width: 760px) {
+  .ops-main { flex-direction: column; }
+  .ops-nodes { width: auto; border-right: none; border-bottom: 1px solid var(--border); max-height: 220px; }
+}
