@@ -38,7 +38,7 @@ Updated: 2026-10-08. Requirement IDs refer to [`requirement.txt`](../requirement
 | Browser test (test-env: 2-DC 4.1, 3.11, 5.0 TLS + login) | Passing: overview, PROD confirm, remote-DC pinning, grid edit verified in Cassandra, create-table form, roles on multi-DC, create/grant/drop role over TLS + login, 3.11 |
 | Accessibility | axe-core WCAG 2.1 A/AA on every main screen: no violations (fails CI on serious/critical) |
 | Desktop window | Electron launched under a display: UI renders, startup to usable UI ~2 s (target 5 s), engine stops on close |
-| Installers | v0.1.0-alpha.1 published for Windows, macOS (arm64, x64), Linux; not yet opened on a real Windows PC or Mac |
+| Installers | v0.1.0-alpha.2 published (https://github.com/Gorak4u/cassandra-studio/releases/tag/v0.1.0-alpha.2): Windows exe, macOS arm64 + x64 dmg, Linux AppImage/deb/rpm, each with .sha256; packaged-engine smoke passed on every OS in the release run; not yet opened on a real Windows PC or Mac |
 
 ## Waiting on the owner
 
