@@ -26,6 +26,8 @@ dependencies {
     implementation("org.apache.cassandra:java-driver-core:$driverVersion")
     implementation("org.apache.cassandra:java-driver-query-builder:$driverVersion")
     implementation("org.apache.sshd:sshd-core:2.20.0")
+    // Ed25519 SSH keys (the usual modern key type): MINA SSHD needs this provider for them.
+    implementation("net.i2p.crypto:eddsa:0.3.0")
     implementation("org.xerial:sqlite-jdbc:3.53.4.0")
     implementation("com.github.javakeyring:java-keyring:1.0.4")
     implementation("org.slf4j:slf4j-simple:2.0.20")

@@ -2,8 +2,18 @@
 #   acme-core   Cassandra 4.1 (Java 11): dc_east x2 + dc_west x1      -> 127.0.0.1:19042
 #   legacy-311  Cassandra 3.11 (Java 8), single node                  -> 127.0.0.1:29042
 #   secure-50   Cassandra 5.0 (Java 17), client TLS + password auth   -> 127.0.0.1:39042 (profile "secure")
-# Start:  ./make-certs.sh && docker compose --profile secure up -d   (or without the profile)
+#   profile "jmx": node access for the JMX tests (JmxAccessIntegrationTest), see below
+# Start:  ./make-certs.sh && docker compose --profile secure --profile jmx up -d   (profiles are optional)
 # Nodes join one at a time; `docker compose ps` shows them healthy when ready (2-4 min).
+#
+# Node access (profile "jmx"; keys and known_hosts come from ./make-certs.sh, in ssh/):
+#   The 4.1 nodes keep the stock LOCAL_JMX=yes, as in the estate: JMX on the node's localhost only (registry
+#   on 7199, RMI server object on a random port; Studio forwards both through the one SSH session).
+#   Each one gets an sshd sidecar sharing its network namespace, so SSH to the node lands next to its
+#   localhost:7199. User "studio", key ssh/id_test (or password "studio-test"), host key in ssh/known_hosts:
+#     east1 -> 127.0.0.1:2201   east2 -> 127.0.0.1:2202   west1 -> 127.0.0.1:2203   (container port 2222)
+#     bastion (jump host) -> 127.0.0.1:2200; from there the nodes are east1:2222, east2:2222, west1:2222
+#   legacy-311 serves remote JMX without auth on 127.0.0.1:27199 (DIRECT method; always on, no profile).
 
 x-cassandra: &cassandra
   environment: &env
@@ -20,13 +30,24 @@ x-cassandra: &cassandra
     retries: 40
     start_period: 30s
 
+x-sshd: &sshd
+  image: linuxserver/openssh-server:10.3_p1-r1-ls238
+  profiles: [jmx]
+  entrypoint: ["/bin/bash", "/keys/sshd-prepare.sh"]
+  environment: { USER_NAME: studio, PUBLIC_KEY_FILE: /keys/id_test.pub, PASSWORD_ACCESS: "true", USER_PASSWORD: studio-test }
+  volumes:
+    - ./sshd-prepare.sh:/keys/sshd-prepare.sh:ro
+    - ./ssh/id_test.pub:/keys/id_test.pub:ro
+    - ./ssh/host_ed25519_key:/keys/host_ed25519_key:ro
+    - ./ssh/host_ed25519_key.pub:/keys/host_ed25519_key.pub:ro
+
 services:
   east1:
     <<: *cassandra
     image: cassandra:4.1
     hostname: east1
     environment: { <<: *env, CASSANDRA_CLUSTER_NAME: acme-core, CASSANDRA_SEEDS: east1, CASSANDRA_NUM_TOKENS: "16", CASSANDRA_DC: dc_east, CASSANDRA_RACK: rack1 }
-    ports: ["19042:9042"]
+    ports: ["19042:9042", "2201:2222"]
   east2:
     <<: *cassandra
     image: cassandra:4.1
@@ -35,6 +56,7 @@ services:
     # for minutes (seen in CI); with nothing to stream, auto_bootstrap: false is safe and joins in seconds.
     entrypoint: ["bash", "-c", "grep -q '^auto_bootstrap:' /etc/cassandra/cassandra.yaml || echo 'auto_bootstrap: false' >> /etc/cassandra/cassandra.yaml; exec docker-entrypoint.sh cassandra -f"]
     environment: { <<: *env, CASSANDRA_CLUSTER_NAME: acme-core, CASSANDRA_SEEDS: east1, CASSANDRA_NUM_TOKENS: "16", CASSANDRA_DC: dc_east, CASSANDRA_RACK: rack2 }
+    ports: ["2202:2222"]
     depends_on: { east1: { condition: service_healthy } }
   west1:
     <<: *cassandra
@@ -44,14 +66,41 @@ services:
     # for minutes (seen in CI); with nothing to stream, auto_bootstrap: false is safe and joins in seconds.
     entrypoint: ["bash", "-c", "grep -q '^auto_bootstrap:' /etc/cassandra/cassandra.yaml || echo 'auto_bootstrap: false' >> /etc/cassandra/cassandra.yaml; exec docker-entrypoint.sh cassandra -f"]
     environment: { <<: *env, CASSANDRA_CLUSTER_NAME: acme-core, CASSANDRA_SEEDS: east1, CASSANDRA_NUM_TOKENS: "16", CASSANDRA_DC: dc_west, CASSANDRA_RACK: rack1 }
+    ports: ["2203:2222"]
     depends_on: { east1: { condition: service_healthy } }
+
+  # sshd sidecars (profile jmx): inside each node's network namespace, so their port 2222 is published
+  # on the node service above and "localhost:7199" is the node's JMX.
+  east1-ssh: { <<: *sshd, network_mode: "service:east1" }
+  east2-ssh: { <<: *sshd, network_mode: "service:east2" }
+  west1-ssh: { <<: *sshd, network_mode: "service:west1" }
+  bastion:
+    <<: *sshd
+    hostname: bastion
+    ports: ["2200:2222"]
 
   legacy311:
     <<: *cassandra
     image: cassandra:3.11
     hostname: legacy311
-    environment: { <<: *env, CASSANDRA_CLUSTER_NAME: legacy-311, CASSANDRA_DC: dc1 }
-    ports: ["29042:9042"]
+    # Remote JMX without auth on 27199 (same port inside and on the host, and stubs name 127.0.0.1),
+    # so the host reaches it with plain JMX/RMI: the DIRECT access method.
+    environment:
+      <<: *env
+      CASSANDRA_CLUSTER_NAME: legacy-311
+      CASSANDRA_DC: dc1
+      LOCAL_JMX: "no"
+      JVM_EXTRA_OPTS: >-
+        -Dcassandra.skip_wait_for_gossip_to_settle=0 -Dcassandra.ring_delay_ms=1000
+        -Dcassandra.jmx.remote.port=27199 -Dcom.sun.management.jmxremote.rmi.port=27199
+        -Dcom.sun.management.jmxremote.authenticate=false -Djava.rmi.server.hostname=127.0.0.1
+    ports: ["29042:9042", "27199:27199"]
+    healthcheck:
+      test: ["CMD-SHELL", "nodetool -p 27199 statusbinary 2>/dev/null | grep -qx running"]
+      interval: 10s
+      timeout: 10s
+      retries: 40
+      start_period: 30s
 
   secure50:
     <<: *cassandra
