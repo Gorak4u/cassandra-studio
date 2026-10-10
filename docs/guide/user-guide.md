@@ -377,7 +377,7 @@ The GC logs panel analyses JVM garbage collector logs, like GCViewer (GCL-1 … 
    options file for the node's Java version (`jvm.options`, `jvm11-server.options`,
    `jvm17-server.options`).
 3. **Charts**: pauses over time, heap before/after, GC time %, allocation and promotion rates.
-   Select a time window and click **Analyse …** to recompute everything for that window;
+   Zoom the charts to a time window and click **Analyse …** to recompute everything for that window;
    **Whole log** goes back.
 4. **Events**: every collection and phase. **Export JSON** saves the report, **Export CSV** the
    events.
