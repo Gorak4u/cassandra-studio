@@ -83,6 +83,8 @@ It contains:
 | File | What |
 |---|---|
 | `studio.db` (with `studio.db-wal` and `studio.db-shm` while Studio runs) | SQLite database: folders and connections (no secrets), query history, audit log, saved scripts, and per-cluster settings (health thresholds, backup provider, diagnostics settings, Hiera settings) |
+| `backups/studio-v<version>-<time>.db` | Copy of the database taken before each upgrade migration; the last 5 are kept |
+| `logs/crash.log` (and `crash.log.1`) | Errors only: engine exceptions, unexpected API errors and UI errors, with passwords, tokens and secrets removed. Rolls over at 1 MB. Never uploaded |
 | `secret.key`, `secrets.json` | Only when no OS keychain is usable: the encrypted secret store and its key (owner-only permissions) |
 
 The desktop shell keeps its own small browser profile (for example the light/dark theme choice) in
@@ -97,6 +99,14 @@ Bulk unload files go where you choose; a relative path is under your Downloads f
 
 ### Back up and restore Studio's own data
 
+From the app: **Studio data → Back up settings** saves folders, connections, saved scripts and
+settings to one file. Passwords are included only when you enter a passphrase, and are encrypted
+with it. **Restore settings** shows what the file contains and lets you skip, replace or keep both for each
+item that already exists. Query history and the audit log are not in this file (export the audit
+log from the Audit log view).
+
+For a full copy, including history and the audit log:
+
 1. Quit Studio (so the database is not being written).
 2. Copy the whole data folder.
 
@@ -107,7 +117,11 @@ in the top bar (without secrets).
 
 ## Logs
 
-The engine writes its log to standard error; v1.0 writes no log file. To see it:
+Errors go to `logs/crash.log` in the data folder (see above). For a support ticket, use
+**Studio data → Copy diagnostics**: it copies versions, OS, Java, engine memory and threads and the
+last 20 errors, without host names, connection names or secrets.
+
+All other engine logging goes to standard error. To see it:
 
 - Linux: start `cassandra-studio` (or the AppImage) from a terminal.
 - macOS: start `"/Applications/Cassandra Studio.app/Contents/MacOS/Cassandra Studio"` from Terminal.

@@ -119,14 +119,30 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      TAG: ${{ inputs.version != '' && format('v{0}', inputs.version) || github.ref_name }}
     steps:
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: docs/release-notes }
       - uses: actions/download-artifact@v4
         with: { path: dist, merge-multiple: true }
+      # Release body: docs/release-notes/v<major.minor.patch>.md when it exists (a pre-release
+      # such as 1.0.0-rc.1 uses the 1.0.0 notes), with its relative links made absolute for this tag.
+      - name: Release notes
+        run: |
+          base="${TAG%%-*}"
+          notes="docs/release-notes/${base}.md"
+          : > release-body.md
+          if [ -f "$notes" ]; then
+            sed -E "s#\]\(\.\./([^)]*)\)#](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/\1)#g" "$notes" > release-body.md
+          fi
+          wc -l release-body.md
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.version != '' && format('v{0}', inputs.version) || github.ref_name }}
+          tag_name: ${{ env.TAG }}
           target_commitish: ${{ github.sha }}
           name: Cassandra Studio ${{ inputs.version != '' && inputs.version || github.ref_name }}
+          body_path: release-body.md
           files: dist/*
           prerelease: ${{ contains(inputs.version != '' && inputs.version || github.ref_name, '-') }}
           generate_release_notes: true
