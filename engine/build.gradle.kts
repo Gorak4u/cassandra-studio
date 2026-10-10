@@ -87,3 +87,13 @@ val writeVersion by tasks.registering {
     doLast { out.get().file("studio-version.txt").asFile.apply { parentFile.mkdirs(); writeText(v) } }
 }
 sourceSets.main { resources.srcDir(writeVersion) }
+
+// Studio Server (docs/guide/server.md): a second launcher, bin/studio-server, in the same distribution.
+val serverStartScripts by tasks.registering(CreateStartScripts::class) {
+    applicationName = "studio-server"
+    mainClass.set("com.cassandrastudio.engine.server.ServerMain")
+    outputDir = layout.buildDirectory.dir("server-scripts").get().asFile
+    classpath = tasks.startScripts.get().classpath
+    defaultJvmOpts = listOf("-Dcom.sun.jndi.rmiURLParsing=legacy", "-Djdk.http.auth.tunneling.disabledSchemes=")
+}
+distributions.main { contents { from(serverStartScripts) { into("bin") } } }
