@@ -7,7 +7,7 @@ import type { EChartsCoreOption } from "echarts/core";
 import { BarChart, LineChart, ScatterChart } from "echarts/charts";
 import { DataZoomComponent, GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
 import { SVGRenderer } from "echarts/renderers";
-import { buildGcOption, chartsFor, GC_CHARTS } from "../gcCharts";
+import { buildGcOption, chartsFor, GC_CHARTS } from "../gcChartOptions";
 import { axisValue, eventsCsv, exportName, fmtK, fmtPause, xOf } from "../gclogFormat";
 import type { ChartTheme } from "../../monitoring/palette";
 import { sampleReport } from "./sampleReport";

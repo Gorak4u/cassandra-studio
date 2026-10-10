@@ -5,7 +5,7 @@ import * as echarts from "echarts/core";
 import { BarChart, ScatterChart } from "echarts/charts";
 import { DataZoomComponent, LegendComponent } from "echarts/components";
 import { connectGroup, EChart } from "../monitoring/EChart";
-import { buildGcOption, chartsFor } from "./gcCharts";
+import { buildGcOption, chartsFor } from "./gcChartOptions";
 import { xOf } from "./gclogFormat";
 import type { GcReport } from "./gclogTypes";
 import type { ChartTheme } from "../monitoring/palette";
