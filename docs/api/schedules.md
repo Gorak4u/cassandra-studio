@@ -43,3 +43,9 @@ severity, title, detail, atMs)` from any source (health rules, repair coverage, 
 schedules) and passes on **changes** only, to notifiers (ALR-4 desktop notifications, ALR-5 routing).
 Sources may publish their current state on every check; a GREEN clears an earlier YELLOW or RED with
 the same connection, source and key.
+
+## Acting user (audit)
+
+`audit.Actor` holds the user acting on the current thread. The desktop engine leaves it unset (the OS
+user applies); Studio Server sets the signed-in user per request with `Actor.as(user, ...)`. A job is
+audited as the user who submitted it, and scheduled runs as `schedule: <name>`.

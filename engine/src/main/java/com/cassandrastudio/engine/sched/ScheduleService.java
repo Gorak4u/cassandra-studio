@@ -1,5 +1,6 @@
 package com.cassandrastudio.engine.sched;
 
+import com.cassandrastudio.engine.audit.Actor;
 import com.cassandrastudio.engine.jobs.Job;
 import com.cassandrastudio.engine.jobs.JobService;
 import com.cassandrastudio.engine.store.Database;
@@ -154,7 +155,7 @@ public final class ScheduleService implements AutoCloseable {
             throw new IllegalStateException("Schedule type " + s.type() + " is not available");
         }
         try {
-            Job job = jobs.submit(task.spec(s), task.task(s));
+            Job job = Actor.as("schedule: " + s.name(), () -> jobs.submit(task.spec(s), task.task(s)));
             record(s, nowMs, job.id(), "STARTED", null);
             updateRun(s.withRun(nextRun(s, nowMs), nowMs, "STARTED", job.id()));
             return job;

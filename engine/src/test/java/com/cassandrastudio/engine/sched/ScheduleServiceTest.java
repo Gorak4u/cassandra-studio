@@ -30,6 +30,7 @@ class ScheduleServiceTest {
     private static final ZoneId UTC = ZoneOffset.UTC;
     private Database db;
     private JobService jobs;
+    private AuditLog audit;
     private ScheduleService schedules;
     private String connId;
     private final AtomicInteger runs = new AtomicInteger();
@@ -42,7 +43,8 @@ class ScheduleServiceTest {
         ConnectionRepository repo = new ConnectionRepository(db, SecretStores.inMemory());
         connId = repo.save(new ConnectionConfig(null, null, "c1", Environment.DEV, null, false, List.of("127.0.0.1"),
                 "dc1", null, null, null, null, null, null, null, null, List.of(), null, null), Map.of()).id();
-        jobs = new JobService(repo, new AuditLog(db, "tester"));
+        audit = new AuditLog(db, "tester");
+        jobs = new JobService(repo, audit);
         schedules = new ScheduleService(db, jobs, UTC);
         schedules.register("count", new ScheduledTask() {
             @Override
@@ -140,6 +142,7 @@ class ScheduleServiceTest {
         assertThat(job.state()).isEqualTo(Job.State.SUCCEEDED);
         assertThat(runs.get()).isEqualTo(1);
         assertThat(fired.nextRunMs()).isGreaterThan(s.nextRunMs());
+        assertThat(audit.search(connId, null, null, 10)).extracting(AuditLog.Entry::actor).containsExactly("schedule: nightly");
         schedules.tick(s.nextRunMs() + 1000); // not due again yet; picks up the finished state
         assertThat(schedules.get(s.id()).orElseThrow().lastOutcome()).isEqualTo("SUCCEEDED");
         assertThat(schedules.runs(s.id(), 10)).extracting(ScheduleService.Run::outcome).containsExactly("SUCCEEDED");
@@ -182,6 +185,16 @@ class ScheduleServiceTest {
         assertThat(schedules.delete(s.id())).isTrue();
         assertThat(schedules.get(s.id())).isEmpty();
         assertThat(schedules.runs(s.id(), 10)).isEmpty();
+    }
+
+    @Test
+    void actorFollowsTheThreadAndTheJob() throws Exception {
+        assertThat(audit.actor()).isEqualTo("tester");
+        Job job = com.cassandrastudio.engine.audit.Actor.as("alice", () -> jobs.submit(
+                new JobService.Spec(connId, "x", "As alice", null, "test", false), ctx -> null));
+        assertThat(audit.actor()).isEqualTo("tester");
+        jobs.await(job.id(), 5000);
+        assertThat(audit.search(connId, "As alice", null, 10)).extracting(AuditLog.Entry::actor).containsExactly("alice");
     }
 
     @Test

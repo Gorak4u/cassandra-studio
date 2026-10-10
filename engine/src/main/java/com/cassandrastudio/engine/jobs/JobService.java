@@ -1,5 +1,6 @@
 package com.cassandrastudio.engine.jobs;
 
+import com.cassandrastudio.engine.audit.Actor;
 import com.cassandrastudio.engine.audit.AuditLog;
 import com.cassandrastudio.engine.conn.ConnectionRepository;
 import com.cassandrastudio.engine.model.ConnectionConfig;
@@ -60,7 +61,8 @@ public final class JobService implements AutoCloseable {
             jobs.put(r.id, r);
             prune();
         }
-        r.future = executor.submit(() -> run(r, task));
+        String actor = Actor.current(); // the job is audited as the user who started it
+        r.future = executor.submit(() -> Actor.as(actor, () -> run(r, task)));
         return r.snapshot();
     }
 

@@ -27,8 +27,10 @@ public final class AuditLog {
         this.actor = actor;
     }
 
+    /** The user on this thread ({@link Actor}), else the engine's own user. */
     public String actor() {
-        return actor;
+        String current = Actor.current();
+        return current != null ? current : actor;
     }
 
     public void record(ConnectionConfig conn, String node, String category, String action, String detail,
@@ -36,7 +38,7 @@ public final class AuditLog {
         db.update("""
                 INSERT INTO audit_log(at, actor, connection_id, connection_name, environment, node, category, action,
                                       detail, outcome, error) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-                Instant.now().toString(), actor, conn == null ? null : conn.id(), conn == null ? null : conn.name(),
+                Instant.now().toString(), actor(), conn == null ? null : conn.id(), conn == null ? null : conn.name(),
                 conn == null ? null : conn.environment().name(), node, category, action, truncate(detail, 20_000),
                 outcome.name(), truncate(error, 4_000));
     }
