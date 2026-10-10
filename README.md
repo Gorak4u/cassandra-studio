@@ -92,6 +92,7 @@ monitoring over SSH tunnels: user `studio`, key `test-env/ssh/id_test`, port 222
 
 ```bash
 cd test-env && ./make-certs.sh && PROFILES="secure jmx" ./wait-ready.sh
+# after a machine restart (starts Docker if needed, then the clusters): scripts/dev-up.sh
 ```
 
 ## Tests
