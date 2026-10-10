@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import type { AuditEntry, ConnectionConfig, HistoryEntry } from "../lib/types";
 import { useToast } from "../components/feedback";
 import { download } from "../lib/export";
+import { HelpLink } from "../components/HelpLink";
 
 /** Searchable query history per connection (CQL-8). */
 export function HistoryPanel(props: { conn: ConnectionConfig; onOpenInEditor: (text: string) => void }) {
@@ -17,6 +18,7 @@ export function HistoryPanel(props: { conn: ConnectionConfig; onOpenInEditor: (t
         <input placeholder="Search statements…" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} />
         <button className="btn small" onClick={load}>⟳</button>
         <button className="btn small" onClick={() => api.clearHistory(props.conn.id!).then(load).catch(toast.error)}>Clear</button>
+        <HelpLink topic="history" />
       </div>
       <table className="data">
         <thead><tr><th>When</th><th>Statement</th><th>Keyspace</th><th>Node</th><th>Rows</th><th>ms</th><th /></tr></thead>
@@ -50,6 +52,7 @@ export function AuditPanel() {
         <input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} />
         <button className="btn small" onClick={load}>⟳</button>
         <button className="btn small" onClick={() => download("studio-audit.json", JSON.stringify(items, null, 2), "application/json")}>Export</button>
+        <HelpLink topic="audit" />
       </div>
       <table className="data">
         <thead><tr><th>When</th><th>Who</th><th>Connection</th><th>Action</th><th>Detail</th><th>Outcome</th></tr></thead>

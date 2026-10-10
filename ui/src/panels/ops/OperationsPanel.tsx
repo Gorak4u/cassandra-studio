@@ -4,6 +4,7 @@ import { jobsApi } from "../../lib/jobsApi";
 import { jobDone, type Job } from "../../lib/jobsTypes";
 import { errorText } from "../../components/feedback";
 import { JobProgress } from "../../components/JobProgress";
+import { HelpLink } from "../../components/HelpLink";
 import { MaintenanceTab, RepairTab } from "./ActionsTab";
 import { OPS_JOB_KINDS, opsClient } from "./opsApi";
 import { NodePicker, useKeyspaces } from "./pickers";
@@ -64,6 +65,7 @@ export function OperationsPanel(props: { conn: ConnectionConfig; info: ClusterIn
         </div>
         <span className="spacer" />
         <span className="muted">{selected.length} of {nodes.length} node{nodes.length === 1 ? "" : "s"} selected</span>
+        <HelpLink topic={`ops-${tab}` as const} />
       </div>
       {noJmx && (
         <div className="notice warn ops-banner" role="alert">

@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import type { ConnectionConfig, Permission, RolesView } from "../lib/types";
 import { useGuarded, useToast } from "../components/feedback";
 import { Modal } from "../components/Modal";
+import { HelpLink } from "../components/HelpLink";
 
 const PERMISSIONS = ["ALL", "SELECT", "MODIFY", "CREATE", "ALTER", "DROP", "AUTHORIZE", "DESCRIBE", "EXECUTE"];
 const RESOURCES: [string, string][] = [
@@ -50,6 +51,7 @@ export function RolesPanel(props: { conn: ConnectionConfig }) {
         <div className="row">
           <button className="btn small primary" onClick={() => setDialog("create")}>+ Role</button>
           <button className="btn small" onClick={load}>⟳</button>
+          <HelpLink topic="roles" />
         </div>
         {view?.rolesError && <div className="notice error">{view.rolesError}</div>}
         <div className="tree">

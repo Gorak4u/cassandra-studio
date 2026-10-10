@@ -1,4 +1,5 @@
 import type { ClusterInfo, ConnectionConfig } from "../lib/types";
+import { HelpLink } from "../components/HelpLink";
 
 /** Cluster details and node list from the driver (MON-10, MON-11, CON-5). Live JMX dashboards arrive in Phase 2. */
 export function OverviewPanel(props: { conn: ConnectionConfig; info: ClusterInfo | null; onRefresh: () => void }) {
@@ -14,6 +15,7 @@ export function OverviewPanel(props: { conn: ConnectionConfig; info: ClusterInfo
         <span className={"status " + (health === "GREEN" ? "UP" : health === "RED" ? "DOWN" : "UNKNOWN")} data-testid="health">{health}</span>
         <span className="spacer" />
         <button className="btn small" onClick={props.onRefresh}>⟳ Refresh</button>
+        <HelpLink topic="overview" />
       </div>
       <div className="cards">
         <div className="card"><div className="label">Nodes up</div><div className="value">{up} / {i.nodes.length}</div></div>

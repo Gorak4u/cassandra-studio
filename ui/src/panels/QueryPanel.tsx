@@ -8,6 +8,7 @@ import { ResultGrid, gridValue, toGridRows, type GridRow } from "../components/R
 import { CONSISTENCY_LEVELS } from "../components/ConnectionDialog";
 import { errorText, useGuarded, useToast } from "../components/feedback";
 import { SaveScriptDialog, ScriptLibrary } from "../components/ScriptLibrary";
+import { HelpLink } from "../components/HelpLink";
 
 interface EditorTab {
   id: number;
@@ -186,6 +187,7 @@ export function QueryPanel(props: {
           <button className="btn small" onClick={() => setSaving(true)}>Save to library</button>
           <button className="btn small" onClick={() => fileInput.current?.click()}>Open .cql</button>
           <button className="btn small" onClick={saveFile}>Save .cql</button>
+          <HelpLink topic="query" />
           <input ref={fileInput} type="file" accept=".cql,.txt,.sql" hidden
             onChange={(e) => e.target.files?.[0] && openFile(e.target.files[0])} />
         </div>

@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useMemo, useState, type KeyboardEvent } fr
 import { mockRequested, monitoringClient } from "../../lib/monitoringApi";
 import type { ClusterInfo, ConnectionConfig } from "../../lib/types";
 import { errorText } from "../../components/feedback";
+import { HelpLink } from "../../components/HelpLink";
 import { ErrorState, Loading } from "./common";
 import { accessProblem } from "./health";
 import { HealthView } from "./HealthView";
@@ -94,6 +95,7 @@ export function MonitoringPanel(props: { conn: ConnectionConfig; info: ClusterIn
           ? <button className="btn small primary" onClick={m.resume}>▶ Resume</button>
           : <button className="btn small" onClick={m.pause} title="Stop polling this cluster's JMX">⏸ Pause</button>}
         <button className="btn small" onClick={m.refresh} disabled={m.paused} aria-label="Poll now">⟳</button>
+        <HelpLink topic="monitoring" />
       </div>
 
       {problem && (

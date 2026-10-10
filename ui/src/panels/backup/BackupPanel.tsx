@@ -8,6 +8,7 @@ import {
   type BackupEntry, type BackupSettings, type Catalogue, type Detection, type Provider, type RunStatus, type Scope,
 } from "./backupApi";
 import "./backup.css";
+import { HelpLink } from "../../components/HelpLink";
 
 // Phase 3 Track 5: backup providers, catalogue, run now (BAK-1..3).
 export function BackupPanel(props: { conn: ConnectionConfig; info: ClusterInfo; dark: boolean }) {
@@ -40,6 +41,7 @@ export function BackupPanel(props: { conn: ConnectionConfig; info: ClusterInfo; 
 
   return (
     <div className="panel backup-panel" data-testid="backups-panel">
+      <HelpLink topic="backups" corner />
       <ProviderSetup id={id} settings={settings}
         onSaved={(s) => { setSettings(s); if (s.provider) loadCatalogue(); }} />
       {settings.provider && (

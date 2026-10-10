@@ -8,6 +8,8 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   base: "./",
+  // The in-app help bundles the guides from ../docs (imported with ?raw); let dev and tests read them.
+  server: { fs: { allow: [".", "../docs/guide", "../docs/release-notes"] } },
   build: {
     outDir: "dist",
     chunkSizeWarningLimit: 4000,
