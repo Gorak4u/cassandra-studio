@@ -41,7 +41,19 @@ public final class AuditLog {
                 outcome.name(), truncate(error, 4_000));
     }
 
+    /** Most rows one export returns. */
+    public static final int MAX_EXPORT = 100_000;
+
     public List<Entry> search(String connectionId, String text, String since, int limit) {
+        return query(connectionId, text, since, Math.max(1, Math.min(limit, 10_000)));
+    }
+
+    /** Same filters as {@link #search}, for files (NFR-AUD export): up to {@value #MAX_EXPORT} rows, newest first. */
+    public List<Entry> export(String connectionId, String text, String since, int limit) {
+        return query(connectionId, text, since, Math.max(1, Math.min(limit, MAX_EXPORT)));
+    }
+
+    private List<Entry> query(String connectionId, String text, String since, int limit) {
         StringBuilder sql = new StringBuilder("SELECT * FROM audit_log WHERE 1=1");
         List<Object> params = new ArrayList<>();
         if (connectionId != null && !connectionId.isBlank()) { sql.append(" AND connection_id = ?"); params.add(connectionId); }
@@ -52,7 +64,7 @@ public final class AuditLog {
             params.add(like); params.add(like); params.add(like);
         }
         sql.append(" ORDER BY id DESC LIMIT ?");
-        params.add(Math.max(1, Math.min(limit, 10_000)));
+        params.add(limit);
         List<Entry> out = new ArrayList<>();
         for (Map<String, Object> r : db.query(sql.toString(), params.toArray())) {
             out.add(new Entry(((Number) r.get("id")).longValue(), (String) r.get("at"), (String) r.get("actor"),
@@ -61,6 +73,37 @@ public final class AuditLog {
                     (String) r.get("outcome"), (String) r.get("error")));
         }
         return out;
+    }
+
+    static final String[] CSV_COLUMNS = {"id", "at", "actor", "connection_id", "connection_name", "environment", "node",
+        "category", "action", "detail", "outcome", "error"};
+
+    /**
+     * RFC 4180 CSV with a header row. Cells that a spreadsheet would run as a formula (=, +, -, @,
+     * tab, CR) are prefixed with an apostrophe.
+     */
+    public static String toCsv(List<Entry> entries) {
+        StringBuilder sb = new StringBuilder(String.join(",", CSV_COLUMNS)).append("\r\n");
+        for (Entry e : entries) {
+            Object[] cells = {e.id(), e.at(), e.actor(), e.connectionId(), e.connectionName(), e.environment(), e.node(),
+                e.category(), e.action(), e.detail(), e.outcome(), e.error()};
+            for (int i = 0; i < cells.length; i++) {
+                if (i > 0) sb.append(',');
+                sb.append(csvCell(cells[i]));
+            }
+            sb.append("\r\n");
+        }
+        return sb.toString();
+    }
+
+    static String csvCell(Object v) {
+        if (v == null) return "";
+        String s = v.toString();
+        if (!(v instanceof Number) && !s.isEmpty() && "=+-@\t\r".indexOf(s.charAt(0)) >= 0) s = "'" + s;
+        if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0) {
+            return '"' + s.replace("\"", "\"\"") + '"';
+        }
+        return s;
     }
 
     private static String truncate(String s, int max) {

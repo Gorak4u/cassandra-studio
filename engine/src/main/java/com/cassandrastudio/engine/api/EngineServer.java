@@ -108,6 +108,7 @@ public final class EngineServer implements AutoCloseable {
         app.exception(IllegalArgumentException.class, (e, ctx) -> error(ctx, 400, "bad_request", e.getMessage(), Map.of()));
         app.exception(Exception.class, (e, ctx) -> {
             LOG.error("Unhandled error on {} {}", ctx.method(), ctx.path(), e);
+            com.cassandrastudio.engine.store.CrashLog.report("api", ctx.method() + " " + ctx.path(), e);
             error(ctx, 500, "internal_error", e.getClass().getSimpleName() + ": " + e.getMessage(), Map.of());
         });
     }
@@ -206,6 +207,7 @@ public final class EngineServer implements AutoCloseable {
         ConfigRoutes.register(app, engine);
         BackupRoutes.register(app, engine);
         BulkRoutes.register(app, engine);
+        StudioRoutes.register(app, engine);
 
         // cluster (CON-5)
         app.get("/api/clusters/{id}/info", ctx -> ctx.json(engine.clusters.info(ctx.pathParam("id"))));

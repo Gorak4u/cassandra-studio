@@ -3,6 +3,7 @@ package com.cassandrastudio.engine;
 import com.cassandrastudio.engine.api.EngineServer;
 import com.cassandrastudio.engine.secrets.SecretStore;
 import com.cassandrastudio.engine.secrets.SecretStores;
+import com.cassandrastudio.engine.store.CrashLog;
 import com.cassandrastudio.engine.store.Database;
 import com.cassandrastudio.engine.util.Json;
 import java.nio.file.Path;
@@ -38,8 +39,19 @@ public final class Main {
         Path dataDir = Path.of(a.getOrDefault("data-dir", defaultDataDir().toString()));
         Path uiDir = a.containsKey("ui-dir") ? Path.of(a.get("ui-dir")) : null;
 
+        CrashLog.install(dataDir);
+        Database db;
+        try {
+            db = Database.open(dataDir);
+        } catch (IllegalStateException e) {
+            // A clean one-line reason for the desktop shell's error dialog, not a stack trace.
+            CrashLog.report("engine", "Studio database could not be opened", e);
+            System.err.println("STUDIO_ENGINE_ERROR " + e.getMessage());
+            System.exit(2);
+            return;
+        }
         SecretStore secrets = SecretStores.create(dataDir, !a.containsKey("no-keyring"));
-        Engine engine = new Engine(Database.open(dataDir), secrets, System.getProperty("user.name", "unknown"));
+        Engine engine = new Engine(db, secrets, System.getProperty("user.name", "unknown"));
         EngineServer server = new EngineServer(engine, new EngineServer.Options(host, port, token, uiDir, a.containsKey("dev-cors")));
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -51,6 +63,7 @@ public final class Main {
         ready.put("port", server.port());
         ready.put("token", token);
         ready.put("version", Version.VERSION);
+        ready.put("startupMs", java.lang.management.ManagementFactory.getRuntimeMXBean().getUptime());
         System.out.println("STUDIO_ENGINE_READY " + Json.write(ready));
         System.out.flush();
 
