@@ -98,7 +98,7 @@ public final class BulkOptions {
         if (ttl != null && ttlField != null) throw ApiException.badRequest("Set either a fixed TTL or a TTL column, not both");
         if (ts != null && tsField != null) throw ApiException.badRequest("Set either a fixed timestamp or a timestamp column, not both");
         return new Load(ks, table, path, format, gzip, textOptions(b), mapping, ttl, ttlField, ts, tsField,
-                intIn(b, "batchSize", 32, 1, 500), intIn(b, "concurrency", 16, 1, 256), intIn(b, "rateLimit", 0, 0, 10_000_000),
+                intIn(b, "batchSize", 32, 1, 500), intIn(b, "concurrency", 64, 1, 256), intIn(b, "rateLimit", 0, 0, 10_000_000),
                 longIn(b, "maxErrors", 100, -1, Long.MAX_VALUE), b.path("dryRun").asBoolean(false),
                 consistency(b, "LOCAL_QUORUM"), intIn(b, "timeoutMs", 30_000, 1000, 600_000));
     }

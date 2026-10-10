@@ -80,7 +80,7 @@ Unload is read-only and not guarded; on a PROD connection the job is audited (ca
 | `ttlSeconds` / `ttlField` | none | `USING TTL n`, or TTL from a file column |
 | `timestampMicros` / `timestampField` | none | `USING TIMESTAMP n`, or from a file column (epoch µs, or a timestamp) |
 | `batchSize` | 32 | rows of the same partition per unlogged batch; 1 = one INSERT per row |
-| `concurrency` | 16 | requests in flight, 1…256 |
+| `concurrency` | 64 | requests in flight, 1…256 |
 | `rateLimit` | 0 (none) | rows per second |
 | `maxErrors` | 100 | stop after more than N rejected rows; -1 = never |
 | `dryRun` | false | validate only: read and convert every row, write nothing (not guarded) |
