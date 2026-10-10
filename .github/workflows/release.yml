@@ -112,9 +112,37 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  linux-installer-check:
+    name: Linux installers on fresh systems (Ubuntu deb, Rocky rpm, AppImage)
+    needs: installers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Playwright (for attaching to the installed app)
+        working-directory: ui
+        run: npm ci --no-audit --no-fund
+      - uses: actions/download-artifact@v4
+        with: { name: installers-Linux-x64, path: linux-dist }
+      - name: Install, start and uninstall each package
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          # Expected engine version: the input or the tag; a build-only run checks no version.
+          v="$INPUT_VERSION"
+          if [ -z "$v" ] && [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF#refs/tags/v}"; fi
+          scripts/installer-check-linux.sh linux-dist "$v" "$RUNNER_TEMP/installer-check"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-installer-check
+          path: ${{ runner.temp }}/installer-check
+          retention-days: 14
+
   publish:
     name: Publish GitHub Release
-    needs: installers
+    needs: [installers, linux-installer-check]
     if: startsWith(github.ref, 'refs/tags/v') || inputs.version != ''
     runs-on: ubuntu-latest
     permissions:

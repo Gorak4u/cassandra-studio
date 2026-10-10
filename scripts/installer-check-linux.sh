@@ -3,7 +3,7 @@
 # on a bare Ubuntu with only the usual desktop libraries), starts the installed app under Xvfb,
 # checks its window shows a usable UI with the expected engine version, then uninstalls it.
 # Catches missing package dependencies, a broken install layout or a launcher that doesn't start.
-# Usage: scripts/installer-check-linux.sh <dir with the .deb/.rpm/.AppImage> <version> [out dir]
+# Usage: scripts/installer-check-linux.sh <dir with the .deb/.rpm/.AppImage> <version|""> [out dir]
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIST="$(cd "$1" && pwd)"; VERSION="$2"; OUT="${3:-$DIST/installer-check}"
@@ -21,14 +21,23 @@ check() {
   if ! docker exec "$c" bash -c "$install" > "$OUT/$name-install.log" 2>&1; then
     echo "   install FAILED"; tail -20 "$OUT/$name-install.log"; fail=1; docker rm -f "$c" >/dev/null; return
   fi
-  echo "   installed ($(docker exec "$c" bash -c "du -sh /opt/'Cassandra Studio' 2>/dev/null | cut -f1 || echo extracted"))"
+  echo "   installed"
   docker exec -d "$c" bash -c "Xvfb :99 -screen 0 1500x950x24 >/tmp/xvfb.log 2>&1 & sleep 1; \
     DISPLAY=:99 $app --no-sandbox --remote-debugging-port=$port >/tmp/app.log 2>&1"
-  if (cd "$ROOT/ui" && node tests/installed-window.mjs "http://127.0.0.1:$port" "$VERSION" "$OUT/$name.png"); then
+  # Fails fast when the app or its engine dies (missing library, wrong glibc) instead of waiting out the timeouts.
+  ( for _ in $(seq 180); do
+      sleep 1
+      if docker exec "$c" grep -qE "GLIBC_[0-9.]+' not found|error while loading shared libraries|Engine did not start" /tmp/app.log 2>/dev/null; then
+        pkill -f "[i]nstalled-window.mjs http://127.0.0.1:$port" || true; exit
+      fi
+    done ) & local watcher=$!
+  if (cd "$ROOT/ui" && timeout 200 node tests/installed-window.mjs "http://127.0.0.1:$port" "$VERSION" "$OUT/$name.png"); then
     echo "   window OK"
   else
-    echo "   window FAILED"; docker exec "$c" tail -40 /tmp/app.log || true; fail=1
+    echo "   window FAILED"; docker exec "$c" bash -c "grep -E \"not found|error while loading|Engine did not start|engine stopped|Error:\" /tmp/app.log | head -10; \
+      echo '-- last lines:'; grep -v '^/tmp/appimage_extracted' /tmp/app.log | grep -v dbus | tail -15" || true; fail=1
   fi
+  kill "$watcher" 2>/dev/null || true
   docker exec "$c" bash -c "pkill -f '[c]assandra-studio' || true; sleep 2; pgrep -af '[c]assandra-studio-engine' && echo 'engine left running' || true"
   if [ -n "$uninstall" ]; then
     if docker exec "$c" bash -c "$uninstall && test ! -e '$APP_BIN'" > "$OUT/$name-uninstall.log" 2>&1; then
