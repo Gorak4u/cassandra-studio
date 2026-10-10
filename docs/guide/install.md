@@ -14,8 +14,8 @@ Download the file for your system from the project's GitHub Releases page. Each 
 | Windows 10/11 (x64) | `CassandraStudio-<version>-win-x64.exe` | Run it. It installs for the current user (no admin rights needed); you can change the folder. |
 | macOS 12+ Apple Silicon | `CassandraStudio-<version>-mac-arm64.dmg` | Open it and drag Cassandra Studio to Applications. |
 | macOS 12+ Intel | `CassandraStudio-<version>-mac-x64.dmg` | As above. |
-| Ubuntu 20.04+ / Debian | `CassandraStudio-<version>-linux-amd64.deb` | `sudo apt install ./CassandraStudio-<version>-linux-amd64.deb` |
-| RHEL / Rocky 8+ | `CassandraStudio-<version>-linux-x86_64.rpm` | `sudo dnf install ./CassandraStudio-<version>-linux-x86_64.rpm` |
+| Ubuntu 22.04+ / Debian 12+ | `CassandraStudio-<version>-linux-amd64.deb` | `sudo apt install ./CassandraStudio-<version>-linux-amd64.deb` |
+| RHEL / Rocky / Alma 9+ | `CassandraStudio-<version>-linux-x86_64.rpm` | `sudo dnf install ./CassandraStudio-<version>-linux-x86_64.rpm` |
 | Any Linux (x64) | `CassandraStudio-<version>-linux-x86_64.AppImage` | `chmod +x` the file and run it. |
 
 The installers are built by the release workflow (`.github/workflows/release.yml`) on GitHub's

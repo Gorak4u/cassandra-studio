@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs each Linux package on a fresh container (deb on Ubuntu, rpm on Rocky Linux, AppImage
+# Installs each Linux package on a fresh container (deb on Ubuntu 22.04 and 24.04, rpm on Rocky Linux, AppImage
 # on a bare Ubuntu with only the usual desktop libraries), starts the installed app under Xvfb,
 # checks its window shows a usable UI with the expected engine version, then uninstalls it.
 # Catches missing package dependencies, a broken install layout or a launcher that doesn't start.
@@ -27,14 +27,14 @@ check() {
   # Fails fast when the app or its engine dies (missing library, wrong glibc) instead of waiting out the timeouts.
   ( for _ in $(seq 180); do
       sleep 1
-      if docker exec "$c" grep -qE "GLIBC_[0-9.]+' not found|error while loading shared libraries|Engine did not start" /tmp/app.log 2>/dev/null; then
+      if docker exec "$c" grep -qE "GLIBC_[0-9.]+' not found|error while loading shared libraries|symbol lookup error|Engine did not start" /tmp/app.log 2>/dev/null; then
         pkill -f "[i]nstalled-window.mjs http://127.0.0.1:$port" || true; exit
       fi
     done ) & local watcher=$!
   if (cd "$ROOT/ui" && timeout 200 node tests/installed-window.mjs "http://127.0.0.1:$port" "$VERSION" "$OUT/$name.png"); then
     echo "   window OK"
   else
-    echo "   window FAILED"; docker exec "$c" bash -c "grep -E \"not found|error while loading|Engine did not start|engine stopped|Error:\" /tmp/app.log | head -10; \
+    echo "   window FAILED"; docker exec "$c" bash -c "grep -E \"not found|error while loading|symbol lookup error|Engine did not start|engine stopped|Error:\" /tmp/app.log | head -10; \
       echo '-- last lines:'; grep -v '^/tmp/appimage_extracted' /tmp/app.log | grep -v dbus | tail -15" || true; fail=1
   fi
   kill "$watcher" 2>/dev/null || true
@@ -53,15 +53,18 @@ deb="$(ls "$DIST"/*.deb 2>/dev/null | head -1 || true)"
 rpm="$(ls "$DIST"/*.rpm 2>/dev/null | head -1 || true)"
 appimage="$(ls "$DIST"/*.AppImage 2>/dev/null | head -1 || true)"
 
-[ -n "$deb" ] && check deb ubuntu:22.04 "$deb" \
-  "export DEBIAN_FRONTEND=noninteractive; apt-get update -q && apt-get install -y -q /pkg/$(basename "$deb") xvfb procps \
-   && test -x '$APP_BIN' && ls /usr/share/applications/ | grep -i cassandra" \
-  "'$APP_BIN'" \
-  "apt-get remove -y -q cassandra-studio"
+# deb on the oldest and newest supported Ubuntu LTS (24.04 renamed libraries, e.g. libasound2t64).
+for img in ${DEB_IMAGES:-ubuntu:22.04 ubuntu:24.04}; do
+  [ -n "$deb" ] && check "deb-${img#ubuntu:}" "$img" "$deb" \
+    "export DEBIAN_FRONTEND=noninteractive; apt-get update -q && apt-get install -y -q /pkg/$(basename "$deb") xvfb procps \
+     && test -x '$APP_BIN' && command -v cassandra-studio && ls /usr/share/applications/ | grep -i cassandra" \
+    "'$APP_BIN'" \
+    "apt-get remove -y -q cassandra-studio"
+done
 
 [ -n "$rpm" ] && check rpm rockylinux:9 "$rpm" \
   "dnf install -y -q /pkg/$(basename "$rpm") xorg-x11-server-Xvfb procps-ng && test -x '$APP_BIN' \
-   && ls /usr/share/applications/ | grep -i cassandra" \
+   && command -v cassandra-studio && ls /usr/share/applications/ | grep -i cassandra" \
   "'$APP_BIN'" \
   "dnf remove -y -q cassandra-studio"
 

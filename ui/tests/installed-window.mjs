@@ -23,7 +23,8 @@ for (let i = 0; i < 60 && !page; i++) {
 if (!page) throw new Error("the app window never loaded the engine's UI");
 await page.getByRole("button", { name: "+ Connection" }).waitFor({ timeout: 60000 });
 const info = await page.evaluate(async () => {
-  const token = new URLSearchParams(location.hash.slice(1)).get("token");
+  // The UI moves the launch token from the URL fragment to session storage once it has loaded.
+  const token = sessionStorage.getItem("studio.token") ?? new URLSearchParams(location.hash.slice(1)).get("token");
   const r = await fetch("/api/info", { headers: { Authorization: `Bearer ${token}` } });
   return r.json();
 });
