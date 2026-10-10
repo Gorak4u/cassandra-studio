@@ -66,7 +66,7 @@ done
   "dnf install -y -q /pkg/$(basename "$rpm") xorg-x11-server-Xvfb procps-ng && test -x '$APP_BIN' \
    && command -v cassandra-studio && ls /usr/share/applications/ | grep -i cassandra" \
   "'$APP_BIN'" \
-  "dnf remove -y -q cassandra-studio"
+  "dnf remove -y -q --noautoremove cassandra-studio"
 
 # AppImage: no FUSE in containers, so it is extracted and run; only common desktop libraries installed.
 [ -n "$appimage" ] && check appimage ubuntu:22.04 "$appimage" \

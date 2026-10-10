@@ -49,7 +49,11 @@ PowerShell, and compare with the `.sha256` file.
 | deb / rpm | `/opt/Cassandra Studio`, started with `cassandra-studio` |
 | AppImage | wherever you keep the file |
 
-Uninstalling removes the program but not your data folder (below).
+To uninstall: Windows **Settings → Apps**; macOS drag the app to the Bin; Ubuntu / Debian
+`sudo apt remove cassandra-studio`; RHEL / Rocky / Alma `sudo dnf remove --noautoremove cassandra-studio`
+(without `--noautoremove`, dnf also tries to remove libraries it installed for Studio, which other
+software may use); AppImage delete the file. Uninstalling removes the program but not your data
+folder (below).
 
 ## Bundled runtime
 
