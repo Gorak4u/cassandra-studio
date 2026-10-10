@@ -113,9 +113,12 @@ jobs:
           (cd ui && npm ci --no-audit --no-fund && npm run build && npx playwright install --with-deps chromium)
       - name: Wait for every node to be up
         run: PROFILES="secure jmx" test-env/wait-ready.sh 300
-      - name: JMX access over SSH tunnels, bastion and direct JMX
+      - name: Live integration tests (JMX access, operations, diagnostics, GC logs, config, backups, bulk)
         working-directory: engine
-        run: ./gradlew --no-daemon test -Pintegration --tests '*JmxAccessIntegrationTest'
+        run: >-
+          ./gradlew --no-daemon test -Pintegration --tests '*JmxAccessIntegrationTest' --tests '*OpsIntegrationTest'
+          --tests '*DiagIntegrationTest' --tests '*GcLogIntegrationTest' --tests '*ConfigIntegrationTest'
+          --tests '*BackupIntegrationTest' --tests '*BulkIntegrationTest'
       - name: Start engine
         run: |
           java -jar engine/build/libs/cassandra-studio-engine-all.jar --port 18080 --token e2e --data-dir "$RUNNER_TEMP/studio" \
