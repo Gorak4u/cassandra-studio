@@ -3,6 +3,7 @@ import type { ClusterInfo, ConnectionConfig } from "../../lib/types";
 import type { Job } from "../../lib/jobsTypes";
 import { errorText } from "../../components/feedback";
 import { JobProgress } from "../../components/JobProgress";
+import { HelpLink } from "../../components/HelpLink";
 import { gclogApi } from "./gclogApi";
 import { eventsCsv, exportName, fmtDuration, fmtK, fmtPause, fmtWhen } from "./gclogFormat";
 import type { AnalysisInfo, Discovery, Finding, GcEvent, GcReport } from "./gclogTypes";
@@ -46,6 +47,7 @@ export function GcLogPanel(props: { conn: ConnectionConfig; info: ClusterInfo; d
 
   return (
     <div className="gcl" data-testid="gclogs-panel">
+      <HelpLink topic="gclog" corner />
       <SourcePanel connId={id} info={props.info} analyses={analyses} current={report?.id ?? null} onLoaded={loaded}
         onOpen={(aid) => open(aid)}
         onDelete={(aid) => gclogApi.remove(id, aid).then(() => { if (report?.id === aid) setReport(null); refreshList(); }).catch((e) => setError(errorText(e)))} />

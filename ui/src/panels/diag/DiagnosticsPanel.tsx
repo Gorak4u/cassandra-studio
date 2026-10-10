@@ -1,6 +1,7 @@
 import { useId, useMemo, useState, type KeyboardEvent } from "react";
 import type { ClusterInfo, ConnectionConfig } from "../../lib/types";
 import { diagApi } from "./diagApi";
+import { HelpLink } from "../../components/HelpLink";
 import { DumpsView, TopThreadsView } from "./ThreadsView";
 import { PartitionsView } from "./PartitionsView";
 import "../monitoring/monitoring.css";
@@ -33,6 +34,7 @@ export function DiagnosticsPanel(props: { conn: ConnectionConfig; info: ClusterI
 
   return (
     <div className="panel diag" data-testid="diagnostics-panel">
+      <HelpLink topic="diagnostics" corner />
       <div className="mon-subtabs" role="tablist" aria-label="Diagnostics views" onKeyDown={onTabKey}>
         {TABS.map(([k, label]) => (
           <button key={k} id={`diag-tab-${id}-${k}`} role="tab" aria-selected={tab === k} aria-controls={`diag-view-${id}`}

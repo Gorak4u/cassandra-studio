@@ -3,6 +3,7 @@ import { api, ApiError } from "../../lib/api";
 import type { ClusterInfo, ConnectionConfig, SchemaTree } from "../../lib/types";
 import { jobDone, type Job } from "../../lib/jobsTypes";
 import { JobProgress } from "../../components/JobProgress";
+import { HelpLink } from "../../components/HelpLink";
 import { errorText, useGuarded, useToast } from "../../components/feedback";
 import { bulkApi, type BulkJob, type LoadPreview, type LoadRequest, type TextOptions, type UnloadRequest } from "./bulkApi";
 import {
@@ -73,6 +74,7 @@ export function BulkPanel(props: { conn: ConnectionConfig; info: ClusterInfo; da
         </div>
         <span className="spacer" />
         <span className="muted">Files are read and written on this computer{defaults?.downloadsDir ? ` (default folder ${defaults.downloadsDir})` : ""}.</span>
+        <HelpLink topic="bulk" />
       </div>
       {error && <div className="notice error" role="alert">Could not read the schema: {error}</div>}
       <div id={`${uid}-view`} role="tabpanel" aria-labelledby={`${uid}-tab-${view}`} className="pad stack">

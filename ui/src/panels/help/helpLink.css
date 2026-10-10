@@ -1,0 +1,5 @@
+/* The "?" help button in panel headers. */
+.help-btn { min-width: 24px; justify-content: center; font-weight: 700; border-radius: 50%; }
+/* For panels without a toolbar row: zero-height, right-aligned, overlapping the empty top-right corner. */
+.help-corner { align-self: flex-end; height: 0; overflow: visible; position: relative; z-index: 2; margin-right: 6px; }
+.help-corner > .help-btn { margin-top: 4px; }

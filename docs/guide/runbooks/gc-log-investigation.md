@@ -38,6 +38,10 @@ Analyses a node's garbage collector logs to explain pauses, heap pressure and fu
 5. **Events**: the individual collections and phases, with cause, duration and heap before/after.
 6. **Export JSON** (the report) or **Export CSV** (the events) for a ticket.
 
+## What the confirmation shows
+
+Nothing to confirm: loading and analysing GC logs only reads.
+
 ## Typical findings and what to do
 
 | Finding | Usually means |

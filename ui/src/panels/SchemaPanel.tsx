@@ -4,6 +4,7 @@ import type { ConnectionConfig, KeyspaceDetails, SchemaTree, TableDetails } from
 import { useGuarded, useToast } from "../components/feedback";
 import { cqlId } from "../lib/cqlText";
 import { Modal } from "../components/Modal";
+import { HelpLink } from "../components/HelpLink";
 
 type Sel = { kind: "keyspace"; ks: string } | { kind: "table"; ks: string; table: string } | null;
 
@@ -58,6 +59,7 @@ export function SchemaPanel(props: { conn: ConnectionConfig; onOpenInEditor: (te
           <button className="btn small" onClick={() => load(true)} title="Reload schema from the cluster">⟳</button>
           <button className="btn small" onClick={() => setForm("keyspace")}>+ Keyspace</button>
           <label className="check"><input type="checkbox" checked={showSystem} onChange={(e) => setShowSystem(e.target.checked)} /> System</label>
+          <HelpLink topic="schema" />
         </div>
         <div className="tree">
           {keyspaces.map((k) => (

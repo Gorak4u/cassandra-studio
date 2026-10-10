@@ -3,6 +3,7 @@ import type { ClusterInfo, ConnectionConfig } from "../../lib/types";
 import { ApiError } from "../../lib/api";
 import { download, toCsv } from "../../lib/export";
 import { JobProgress } from "../../components/JobProgress";
+import { HelpLink } from "../../components/HelpLink";
 import { errorText } from "../../components/feedback";
 import type { Job } from "../../lib/jobsTypes";
 import {
@@ -57,6 +58,7 @@ export function ConfigPanel(props: { conn: ConnectionConfig; info: ClusterInfo; 
               onClick={() => setView(t.key)}>{t.label}</button>
           ))}
         </div>
+        <HelpLink topic="config" />
       </div>
       {jobId && <div className="cfg-job"><JobProgress jobId={jobId} onDone={onDone} /></div>}
       {loadError && <div className="notice error" role="alert">{loadError}</div>}
