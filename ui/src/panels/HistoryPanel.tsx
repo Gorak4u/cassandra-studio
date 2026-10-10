@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import type { AuditEntry, ConnectionConfig, HistoryEntry } from "../lib/types";
 import { useToast } from "../components/feedback";
 import { download } from "../lib/export";
+import { studioApi } from "../lib/studioApi";
 
 /** Searchable query history per connection (CQL-8). */
 export function HistoryPanel(props: { conn: ConnectionConfig; onOpenInEditor: (text: string) => void }) {
@@ -47,9 +48,20 @@ export function AuditPanel() {
     <div className="pad stack scroll" style={{ height: "100%" }}>
       <div className="row">
         <h3 style={{ margin: 0 }}>Audit log</h3>
-        <input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} />
+        <input placeholder="Search…" aria-label="Search the audit log" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} />
         <button className="btn small" onClick={load}>⟳</button>
-        <button className="btn small" onClick={() => download("studio-audit.json", JSON.stringify(items, null, 2), "application/json")}>Export</button>
+        {(["csv", "json"] as const).map((fmt) => (
+          <button
+            key={fmt}
+            className="btn small"
+            title={`Every entry matching the search (up to 100,000), not only the ${items.length} shown`}
+            onClick={() => studioApi.auditExport(fmt, q)
+              .then((text) => download(`studio-audit-${new Date().toISOString().slice(0, 10)}.${fmt}`, text, fmt === "csv" ? "text/csv" : "application/json"))
+              .catch(toast.error)}
+          >
+            Export {fmt.toUpperCase()}
+          </button>
+        ))}
       </div>
       <table className="data">
         <thead><tr><th>When</th><th>Who</th><th>Connection</th><th>Action</th><th>Detail</th><th>Outcome</th></tr></thead>
