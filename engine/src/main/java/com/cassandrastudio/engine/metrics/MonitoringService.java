@@ -48,6 +48,11 @@ public final class MonitoringService implements AutoCloseable {
     public static final int MIN_INTERVAL_SEC = 2;
     public static final long DEFAULT_WINDOW_MS = 15 * 60_000L;
     static final int MAX_CONCURRENT_READS = 64;
+    /** The ring request's whole JMX budget, and how many nodes it tries before using the driver's tokens. */
+    static final long RING_BUDGET_MS = 15_000;
+    static final int RING_MAX_NODES = 3;
+    /** The per-table view's whole budget across all nodes. */
+    static final long TABLES_BUDGET_MS = 20_000;
     private static final String THRESHOLDS_KEY = "monitoring.thresholds/";
 
     private final Database db;
@@ -56,7 +61,7 @@ public final class MonitoringService implements AutoCloseable {
     private final Topology topology;
     private final LongSupplier clock;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
-    private final Semaphore permits = new Semaphore(MAX_CONCURRENT_READS);
+    private final Semaphore permits = new Semaphore(MAX_CONCURRENT_READS, true);
     private final Map<String, Poller> pollers = new ConcurrentHashMap<>();
     private final Map<String, Thresholds> thresholds = new ConcurrentHashMap<>();
 
@@ -100,6 +105,11 @@ public final class MonitoringService implements AutoCloseable {
     public synchronized void stop(String connectionId) {
         Poller p = pollers.remove(connectionId);
         if (p != null) p.stop();
+    }
+
+    /** The running poller (tests). */
+    Poller pollerFor(String connectionId) {
+        return pollers.get(connectionId);
     }
 
     public boolean isStarted(String connectionId) {
@@ -194,11 +204,19 @@ public final class MonitoringService implements AutoCloseable {
         String ks = keyspace != null && !keyspace.isBlank() ? keyspace
                 : topology.keyspaces(connectionId).stream().findFirst().orElse(null);
         NodeReader.RingRead rr = null;
+        Map<String, NodeSnapshot> latest = latestByAddress(connectionId);
         if (cfg.jmx().method() != JmxMethod.EXPORTER) {
             Map<String, String> secrets = secretsOf(connectionId);
-            for (NodeInfo n : upFirst(info.nodes())) {
+            // One overall budget and a few nodes at most, readable ones first: with many hung nodes the
+            // request still answers in time, falling back to the driver's token map (NFR-RELI).
+            long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(RING_BUDGET_MS);
+            int tried = 0;
+            for (NodeInfo n : readableFirst(info.nodes(), latest)) {
+                long left = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+                if (left < 500 || tried++ >= RING_MAX_NODES) break;
                 try {
-                    rr = call(() -> NodeReader.readRing(jmx.session(cfg, secrets, endpoint(n)).mbeans(), n.version(), ks));
+                    rr = call(() -> NodeReader.readRing(jmx.session(cfg, secrets, endpoint(n)).mbeans(), n.version(), ks),
+                            Math.min(left, 15_000));
                     if (!rr.endpointByToken().isEmpty()) break;
                 } catch (RuntimeException e) {
                     rr = null;
@@ -214,7 +232,6 @@ public final class MonitoringService implements AutoCloseable {
                     tokensByHost.computeIfAbsent(hostByEndpoint.getOrDefault(ep, ep), k -> new ArrayList<>()).add(token));
         }
         if (tokensByHost.isEmpty()) tokensByHost.putAll(topology.tokens(connectionId));
-        Map<String, NodeSnapshot> latest = latestByAddress(connectionId);
         Map<String, List<RingNode>> byDc = new TreeMap<>();
         for (NodeInfo n : info.nodes()) {
             String ep = n.hostId() == null ? n.address() : endpointByHost.getOrDefault(n.hostId(), n.address());
@@ -251,9 +268,14 @@ public final class MonitoringService implements AutoCloseable {
         }
         List<List<TableMetrics>> perNode = new ArrayList<>();
         String lastError = null;
+        // one budget for the whole request: hung nodes are left out instead of holding it up (NFR-RELI)
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(TABLES_BUDGET_MS);
         for (Future<List<TableMetrics>> f : futures) {
             try {
-                perNode.add(f.get(30, TimeUnit.SECONDS));
+                perNode.add(f.get(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS));
+            } catch (java.util.concurrent.TimeoutException e) {
+                f.cancel(true);
+                lastError = "Timed out after " + TABLES_BUDGET_MS / 1000 + " s";
             } catch (Exception e) {
                 f.cancel(true);
                 lastError = Poller.message(e.getCause() == null ? e : e.getCause());
@@ -281,10 +303,10 @@ public final class MonitoringService implements AutoCloseable {
         return m;
     }
 
-    private <T> T call(Callable<T> task) {
+    private <T> T call(Callable<T> task, long timeoutMs) {
         Future<T> f = executor.submit(task);
         try {
-            return f.get(15, TimeUnit.SECONDS);
+            return f.get(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (Exception e) {
             f.cancel(true);
             throw new IllegalStateException(Poller.message(e.getCause() == null ? e : e.getCause()), e);
@@ -295,9 +317,14 @@ public final class MonitoringService implements AutoCloseable {
         return new NodeEndpoint(n.hostId(), n.address(), n.datacenter(), n.rack(), n.version());
     }
 
-    private static List<NodeInfo> upFirst(List<NodeInfo> nodes) {
+    /** Nodes read fine by the last poll first, then other nodes the driver sees up, then the rest. */
+    private static List<NodeInfo> readableFirst(List<NodeInfo> nodes, Map<String, NodeSnapshot> latest) {
         List<NodeInfo> out = new ArrayList<>(nodes);
-        out.sort(Comparator.comparing((NodeInfo n) -> !"UP".equals(n.state())));
+        out.sort(Comparator.comparingInt((NodeInfo n) -> {
+            NodeSnapshot s = latest.get(n.address());
+            if (s != null && s.error() == null) return 0;
+            return s == null && "UP".equals(n.state()) ? 1 : 2;
+        }));
         return out;
     }
 

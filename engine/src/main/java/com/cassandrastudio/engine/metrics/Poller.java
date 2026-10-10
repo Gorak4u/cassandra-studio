@@ -60,7 +60,11 @@ final class Poller {
     private final HealthRules rules = new HealthRules();
     private final Map<String, NodeState> nodes = new ConcurrentHashMap<>();
     /** A lock, not a monitor: a virtual thread blocking inside {@code synchronized} pins its carrier. */
-    private final ReentrantLock pollLock = new ReentrantLock();
+    private final ReentrantLock pollLock = new ReentrantLock(true);
+    /** How long a request waits for the first poll before answering 503. */
+    static final long FIRST_POLL_WAIT_MS = 25_000;
+    /** Pause between polls even when a poll took longer than the interval (slow connects never spin). */
+    static final long MIN_PAUSE_MS = 1_000;
     static final long DISK_REFRESH_MS = 60_000;
     static final long EXPORTER_RETRY_MS = 5 * 60_000;
     private volatile boolean running;
@@ -150,7 +154,7 @@ final class Poller {
             } catch (RuntimeException e) {
                 LOG.warn("Monitoring poll failed for connection {}: {}", connectionId, e.toString());
             }
-            long sleepMs = intervalMs - (System.nanoTime() - started) / 1_000_000;
+            long sleepMs = Math.max(Math.min(MIN_PAUSE_MS, intervalMs), intervalMs - (System.nanoTime() - started) / 1_000_000);
             try {
                 if (sleepMs > 0) Thread.sleep(sleepMs);
             } catch (InterruptedException e) {
@@ -182,12 +186,28 @@ final class Poller {
     ClusterSnapshot latestOrPoll() {
         ClusterSnapshot s = latest;
         if (s != null) return s;
-        pollLock.lock();
+        // Wait for the first poll that is under way (a cluster that hangs on connect can take the driver's
+        // whole connect timeout), but never longer than FIRST_POLL_WAIT_MS: the request must answer.
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(FIRST_POLL_WAIT_MS);
         try {
-            return latest != null ? latest : doPoll();
-        } finally {
-            pollLock.unlock();
+            while (System.nanoTime() < deadline) {
+                if (pollLock.tryLock(100, TimeUnit.MILLISECONDS)) {
+                    try {
+                        return latest != null ? latest : doPoll();
+                    } finally {
+                        pollLock.unlock();
+                    }
+                }
+                s = latest;
+                if (s != null) return s;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
+        s = latest;
+        if (s != null) return s;
+        throw new com.cassandrastudio.engine.util.ApiException(503, "first_poll_pending",
+                "The first poll of this cluster is still running (cluster slow or unreachable); try again shortly");
     }
 
     private ClusterSnapshot doPoll() {
@@ -212,20 +232,30 @@ final class Poller {
         nodes.keySet().retainAll(infos.stream().map(NodeInfo::address).toList());
 
         Map<String, Future<NodeReader.Result>> futures = new LinkedHashMap<>();
+        Map<String, Permit> held = new HashMap<>();
         Map<String, String> skipped = new HashMap<>();
-        for (NodeInfo n : infos) {
+        // Nodes that answered last time first: with a fair semaphore they get read slots before nodes that
+        // failed (and may hang again), so a dead DC cannot starve the healthy ones (NFR-RELI at 500 nodes).
+        List<NodeInfo> order = new ArrayList<>(infos);
+        order.sort(Comparator.comparing((NodeInfo n) -> {
+            NodeState st = nodes.get(n.address());
+            return st != null && st.access != null && !st.access.ok();
+        }));
+        for (NodeInfo n : order) {
             NodeState st = nodes.computeIfAbsent(n.address(), k -> new NodeState());
             if (!st.inFlight.compareAndSet(false, true)) {
                 skipped.put(n.address(), "Previous read is still running (node slow or hung)");
                 continue;
             }
+            Permit permit = new Permit(permits);
+            held.put(n.address(), permit);
             futures.put(n.address(), executor.submit(() -> {
                 try {
-                    permits.acquire();
+                    if (!permit.acquire()) throw new TimeoutException("Not read: the poll's time ran out");
                     try {
                         return read(n, st, clock.getAsLong());
                     } finally {
-                        permits.release();
+                        permit.release();
                     }
                 } finally {
                     st.inFlight.set(false);
@@ -240,7 +270,9 @@ final class Poller {
             try {
                 results.put(address, f.get(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS));
             } catch (TimeoutException e) {
-                // not cancelled: the read keeps its in-flight mark until JmxAccess's own timeout ends it
+                // not cancelled: the read keeps its in-flight mark until JmxAccess's own timeout ends it,
+                // but gives its read slot back (a hung connection puts no load anywhere)
+                held.get(address).release();
                 errors.put(address, "Timed out after " + timeoutMs() / 1000.0 + " s");
             } catch (ExecutionException e) {
                 errors.put(address, message(e.getCause()));
@@ -369,6 +401,32 @@ final class Poller {
         }
         st.lastOk = snap;
         st.lastOkAtMs = now;
+    }
+
+    /**
+     * One read's slot in the shared limit of concurrent node reads. Released once, by whichever comes
+     * first: the read finishing or the poll giving up on it; a read given up on before it got a slot
+     * does not start.
+     */
+    static final class Permit {
+        private final Semaphore permits;
+        /** 0 = waiting, 1 = holding, 2 = released or abandoned. */
+        private final java.util.concurrent.atomic.AtomicInteger state = new java.util.concurrent.atomic.AtomicInteger();
+
+        Permit(Semaphore permits) {
+            this.permits = permits;
+        }
+
+        boolean acquire() throws InterruptedException {
+            permits.acquire();
+            if (state.compareAndSet(0, 1)) return true;
+            permits.release();
+            return false;
+        }
+
+        void release() {
+            if (state.getAndSet(2) == 1) permits.release();
+        }
     }
 
     private static NodeInfo unknownState(NodeInfo n) {
