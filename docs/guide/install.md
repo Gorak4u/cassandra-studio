@@ -173,17 +173,40 @@ libraries mentioned under [Bundled runtime](#bundled-runtime) from your internal
 Studio connects only to your clusters: CQL to the nodes, SSH to the nodes or a jump host, JMX
 directly or through SSH, and HTTP to a node's jmx_exporter. It makes no connections to the internet.
 
-- **HTTP(S) proxies** are not used. Connections to jmx_exporter explicitly bypass any configured
-  proxy, because node addresses are internal. If your machine reaches the nodes only through a
-  proxy, use an SSH jump host (connection → SSH → *Jump host / bastion*) instead; SOCKS and HTTP
-  proxies for SSH are not supported.
-- **Custom CA bundles for TLS**: set them per connection. On the TLS tab, the truststore can be a
-  JKS or PKCS12 truststore or a PEM CA bundle (several certificates in one file). The same files are
-  used for JMX over SSL. Studio does not read the operating system's certificate store or the
-  bundled Java's `cacerts` for cluster connections.
+**Corporate proxy.** Studio needs a proxy only for the optional update check: cluster traffic is
+direct (or through SSH). Settings > Network > Proxy:
+- *System proxy* (default) uses `HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY` from the environment Studio is
+  started from, or the Java properties `https.proxyHost` / `https.proxyPort` / `http.nonProxyHosts`
+  (e.g. via `JAVA_TOOL_OPTIONS`). OS proxy settings (Windows Internet Options, macOS Network
+  preferences) and PAC/WPAD scripts are **not** read; apps started from the macOS Dock/Finder or the
+  Windows Start menu usually do not see shell variables. In those cases choose *Manual*.
+- *Manual*: host, port, optional user and password (kept in the OS keychain), and a no-proxy list.
+  Basic authentication is supported; NTLM/Kerberos proxies need a local helper proxy (e.g. cntlm, px).
+- "Also use this proxy for HTTP to cluster nodes" only matters for the jmx_exporter fallback when nodes
+  are reachable only through the proxy.
 
-> TODO (v1.0 release hardening): proxy, CA bundle and update-check settings are being added under
-> Settings → Network. This section will be updated when they ship.
+**SSH through a proxy.** Per connection, Edit > SSH > "SSH through a proxy": HTTP CONNECT (most
+corporate proxies; port 22 must be allowed by the proxy policy) or SOCKS5. With a bastion, the proxy
+reaches the bastion; the bastion reaches the nodes.
+
+**TLS-inspecting proxies and private CAs.** Put the corporate root CA(s) in one PEM file and set
+Settings > Network > CA bundle; it is trusted for CQL TLS, JMX TLS and the update check in addition to
+each connection's truststore. Or tick "Also trust the operating system's CA certificates" when the CA is
+already deployed to the OS store. Reconnect open clusters after changing it. The update check reports a
+TLS failure with this hint.
+
+**Air-gapped sites.** Install from the offline installer (Java runtime, engine, UI and the Monaco
+editor are all bundled; nothing is downloaded at first start). Tick Settings > Network > Offline mode:
+the update check is off and no call leaves the machine except to your clusters. To verify: the packaged
+UI has a CSP of `'self'` only, the desktop shell blocks and logs every non-engine request, and the build
+fails on any external URL (`ui/scripts/check-offline.mjs`).
+
+**Updates.** "Check for updates" (default on) asks GitHub's API for the latest release when Studio
+starts, at most every 6 hours, and shows a banner with a link to the release page. Studio never
+downloads or installs anything itself. Firewalls that allow `api.github.com:443` (and
+`github.com` for the user's browser) are enough. Turning it off, or offline mode, stops the request.
+
+**No telemetry.** Studio sends no usage data, crash reports or analytics anywhere.
 
 ## Node prerequisites (SSH and JMX)
 
