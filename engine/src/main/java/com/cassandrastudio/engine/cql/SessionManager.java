@@ -32,7 +32,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.TrustManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -225,12 +225,12 @@ public final class SessionManager implements AutoCloseable {
 
     static SSLContext sslContext(ConnectionConfig.Tls tls, Map<String, String> secrets) {
         try {
-            TrustManagerFactory tmf = null;
+            KeyStore ts = null;
             if (tls.truststorePath() != null && !tls.truststorePath().isBlank()) {
-                KeyStore ts = loadStore(tls.truststorePath(), tls.truststoreType(), secrets.get(SecretKeys.TRUSTSTORE_PASSWORD));
-                tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-                tmf.init(ts);
+                ts = loadStore(tls.truststorePath(), tls.truststoreType(), secrets.get(SecretKeys.TRUSTSTORE_PASSWORD));
             }
+            // The connection's truststore plus the global CA bundle / OS store (Settings > Network, NFR-NET).
+            TrustManager[] trust = com.cassandrastudio.engine.net.Net.trustManagers(ts);
             KeyManagerFactory kmf = null;
             if (tls.keystorePath() != null && !tls.keystorePath().isBlank()) {
                 String pw = secrets.get(SecretKeys.KEYSTORE_PASSWORD);
@@ -239,7 +239,7 @@ public final class SessionManager implements AutoCloseable {
                 kmf.init(ks, pw == null ? new char[0] : pw.toCharArray());
             }
             SSLContext ctx = SSLContext.getInstance("TLS");
-            ctx.init(kmf == null ? null : kmf.getKeyManagers(), tmf == null ? null : tmf.getTrustManagers(), null);
+            ctx.init(kmf == null ? null : kmf.getKeyManagers(), trust, null);
             return ctx;
         } catch (ApiException e) {
             throw e;

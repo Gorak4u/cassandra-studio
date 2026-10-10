@@ -21,6 +21,8 @@ cp "$ROOT/engine/build/libs/cassandra-studio-engine-all.jar" "$RES/engine/"
 echo "==> java runtime (jlink)"
 # Modules the engine needs: driver (netty, sasl/gssapi), JMX over RMI, SQLite (java.sql), keyring (JNA).
 MODULES=java.base,java.compiler,java.desktop,java.logging,java.management,java.management.rmi,java.naming,java.net.http,java.rmi,java.scripting,java.security.jgss,java.security.sasl,java.sql,java.transaction.xa,java.xml,jdk.crypto.ec,jdk.management,jdk.naming.dns,jdk.naming.rmi,jdk.unsupported,jdk.zipfs,jdk.localedata
+# Windows: SunMSCAPI gives the "trust the OS CA certificates" setting the Windows-ROOT store (NFR-NET).
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) MODULES="$MODULES,jdk.crypto.mscapi" ;; esac
 JLINK="${JAVA_HOME:?JAVA_HOME must point to a JDK 21}/bin/jlink"
 [ -x "$JLINK" ] || JLINK="$JLINK.exe"
 "$JLINK" --add-modules "$MODULES" --strip-debug --no-header-files \

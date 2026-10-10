@@ -206,6 +206,7 @@ public final class EngineServer implements AutoCloseable {
         ConfigRoutes.register(app, engine);
         BackupRoutes.register(app, engine);
         BulkRoutes.register(app, engine);
+        NetworkRoutes.register(app, engine);
 
         // cluster (CON-5)
         app.get("/api/clusters/{id}/info", ctx -> ctx.json(engine.clusters.info(ctx.pathParam("id"))));

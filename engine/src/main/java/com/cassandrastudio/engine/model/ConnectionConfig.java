@@ -92,15 +92,36 @@ public record ConnectionConfig(
 
     public enum SshAuth { AGENT, KEY, PASSWORD }
 
-    /** SSH to nodes (CON-7): JMX tunnels, log tail, GC logs, scripts. */
+    /**
+     * SSH to nodes (CON-7): JMX tunnels, log tail, GC logs, scripts. {@code proxy} (optional, NFR-NET): reach the
+     * first hop (the jump host, else the node) through an HTTP CONNECT or SOCKS5 proxy; absent in older saves.
+     */
     public record Ssh(String username, Integer port, SshAuth auth, String keyPath, String jumpHost, Integer jumpPort,
-                      String jumpUser, boolean strictHostKeyChecking, String knownHostsPath) {
+                      String jumpUser, boolean strictHostKeyChecking, String knownHostsPath, SshProxy proxy) {
         public static final Ssh DEFAULT = new Ssh(null, 22, SshAuth.AGENT, null, null, 22, null, true, null);
 
+        @com.fasterxml.jackson.annotation.JsonCreator
         public Ssh {
             port = port == null ? 22 : port;
             auth = auth == null ? SshAuth.AGENT : auth;
             jumpPort = jumpPort == null ? 22 : jumpPort;
+            proxy = proxy == null || proxy.type() == null || proxy.host() == null || proxy.host().isBlank() ? null : proxy;
+        }
+
+        /** Without a proxy (the shape before NFR-NET). */
+        public Ssh(String username, Integer port, SshAuth auth, String keyPath, String jumpHost, Integer jumpPort,
+                   String jumpUser, boolean strictHostKeyChecking, String knownHostsPath) {
+            this(username, port, auth, keyPath, jumpHost, jumpPort, jumpUser, strictHostKeyChecking, knownHostsPath, null);
+        }
+    }
+
+    public enum ProxyType { HTTP, SOCKS5 }
+
+    /** A proxy for SSH: HTTP CONNECT or SOCKS5, optional user (password in secret {@link SecretKeys#SSH_PROXY_PASSWORD}). */
+    public record SshProxy(ProxyType type, String host, Integer port, String username) {
+        public SshProxy {
+            port = port == null ? (type == ProxyType.SOCKS5 ? 1080 : 3128) : port;
+            username = username == null || username.isBlank() ? null : username;
         }
     }
 
@@ -112,8 +133,9 @@ public record ConnectionConfig(
         public static final String SSH_PASSPHRASE = "sshPassphrase";
         public static final String TRUSTSTORE_PASSWORD = "truststorePassword";
         public static final String KEYSTORE_PASSWORD = "keystorePassword";
+        public static final String SSH_PROXY_PASSWORD = "sshProxyPassword";
         public static final List<String> ALL = List.of(PASSWORD, JMX_PASSWORD, SSH_PASSWORD, SSH_PASSPHRASE,
-                TRUSTSTORE_PASSWORD, KEYSTORE_PASSWORD);
+                TRUSTSTORE_PASSWORD, KEYSTORE_PASSWORD, SSH_PROXY_PASSWORD);
 
         private SecretKeys() {}
 

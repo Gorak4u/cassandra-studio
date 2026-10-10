@@ -366,8 +366,10 @@ public final class DefaultJmxAccess implements JmxAccess {
     private synchronized HttpClient http() {
         if (closed) throw new IllegalStateException("JMX access is closed");
         if (http == null) {
-            // Node addresses are internal: never through the corporate HTTP proxy.
-            http = HttpClient.newBuilder().connectTimeout(connectTimeout).proxy(HttpClient.Builder.NO_PROXY)
+            // Node addresses are internal: direct, unless Settings > Network opts in to the proxy for nodes.
+            http = HttpClient.newBuilder().connectTimeout(connectTimeout)
+                    .proxy(com.cassandrastudio.engine.net.Net.nodeHttpProxy())
+                    .authenticator(com.cassandrastudio.engine.net.Net.authenticator())
                     .followRedirects(HttpClient.Redirect.NEVER).build();
         }
         return http;

@@ -2,6 +2,8 @@ package com.cassandrastudio.engine.ssh;
 
 import com.cassandrastudio.engine.model.ConnectionConfig;
 import com.cassandrastudio.engine.model.ConnectionConfig.SecretKeys;
+import com.cassandrastudio.engine.net.ProxyEndpoint;
+import com.cassandrastudio.engine.net.ProxyRelay;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.ConnectException;
@@ -77,13 +79,16 @@ public final class SshConnector implements AutoCloseable {
         SshClient c = client();
         ClientSession jump = null;
         String jumpName = null;
+        ProxyRelay relay = null; // NFR-NET: the first hop (jump host, else node) through an HTTP CONNECT / SOCKS5 proxy
         try {
             SocketAddress dial;
             if (ssh.jumpHost() != null && !ssh.jumpHost().isBlank()) { // the jump host resolves the node's name
                 String jumpUser = ssh.jumpUser() == null || ssh.jumpUser().isBlank() ? ssh.username() : ssh.jumpUser();
                 jumpName = ssh.jumpHost() + ":" + ssh.jumpPort();
-                jump = open(c, jumpUser, ssh.jumpHost(), ssh.jumpPort(), resolve(ssh.jumpHost(), ssh.jumpPort()),
-                        ssh, creds, deadline, timeout);
+                SocketAddress jumpDial = ssh.proxy() != null
+                        ? (relay = relay(ssh, secrets, ssh.jumpHost(), ssh.jumpPort(), timeout)).address()
+                        : resolve(ssh.jumpHost(), ssh.jumpPort());
+                jump = open(c, jumpUser, ssh.jumpHost(), ssh.jumpPort(), jumpDial, ssh, creds, deadline, timeout);
                 String unreachable = SshConnection.probe(jump, host, ssh.port(), remaining(deadline, timeout, host));
                 if (unreachable != null) {
                     throw new SshAccessException("jump host " + jumpName + " cannot reach " + host + ":" + ssh.port()
@@ -93,15 +98,31 @@ public final class SshConnector implements AutoCloseable {
                         new SshdSocketAddress(host, ssh.port())).getPort();
                 dial = new InetSocketAddress("127.0.0.1", local);
             } else {
-                dial = resolve(host, ssh.port());
+                dial = ssh.proxy() != null ? (relay = relay(ssh, secrets, host, ssh.port(), timeout)).address()
+                        : resolve(host, ssh.port());
             }
             ClientSession node = open(c, ssh.username(), host, ssh.port(), dial, ssh, creds, deadline, timeout);
             return new SshConnection(node, jump, jumpName);
         } catch (IOException | RuntimeException e) {
             if (jump != null) jump.close(true);
+            if (relay != null) {
+                relay.close();
+                if (relay.failure() != null) {
+                    throw new SshAccessException("SSH via " + relay.failure().getMessage(), relay.failure());
+                }
+            }
             if (e instanceof SshAccessException s) throw s;
             throw new SshAccessException("SSH to " + host + ":" + ssh.port() + " failed: " + e.getMessage(), e);
         }
+    }
+
+    /** A local one-shot relay to {@code host:port} through the connection's SSH proxy. */
+    private static ProxyRelay relay(ConnectionConfig.Ssh ssh, Map<String, String> secrets, String host, int port,
+                                    Duration timeout) throws IOException {
+        ConnectionConfig.SshProxy p = ssh.proxy();
+        ProxyEndpoint proxy = new ProxyEndpoint(p.type(), p.host(), p.port(), p.username(),
+                secrets.get(SecretKeys.SSH_PROXY_PASSWORD));
+        return new ProxyRelay(proxy, host, port, timeout);
     }
 
     private static SocketAddress resolve(String host, int port) {

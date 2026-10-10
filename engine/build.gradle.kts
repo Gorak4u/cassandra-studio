@@ -44,7 +44,8 @@ application {
     mainClass.set("com.cassandrastudio.engine.Main")
     // Same fix the control repo applies to nodetool: newer JDKs reject the
     // RMI URLs some Cassandra versions advertise.
-    applicationDefaultJvmArgs = listOf("-Dcom.sun.jndi.rmiURLParsing=legacy")
+    // Basic auth to a corporate proxy for HTTPS tunnels (update check) is off in the JDK by default (NFR-NET).
+    applicationDefaultJvmArgs = listOf("-Dcom.sun.jndi.rmiURLParsing=legacy", "-Djdk.http.auth.tunneling.disabledSchemes=")
 }
 
 tasks.withType<JavaCompile> {
@@ -63,6 +64,7 @@ tasks.test {
         }
     }
     systemProperty("cassandra.versions", project.findProperty("cassandraVersions") ?: "4.1")
+    systemProperty("jdk.http.auth.tunneling.disabledSchemes", "") // as the app runs (see application above)
     maxHeapSize = "1g"
     testLogging { events("failed"); exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL }
 }
