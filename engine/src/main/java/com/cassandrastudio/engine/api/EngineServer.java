@@ -201,6 +201,7 @@ public final class EngineServer implements AutoCloseable {
 
         // Phase 3 (docs/api/jobs.md and one routes class per feature)
         JobRoutes.register(app, engine.jobs);
+        ScheduleRoutes.register(app, engine);
         OpsRoutes.register(app, engine);
         DiagRoutes.register(app, engine);
         GcLogRoutes.register(app, engine);

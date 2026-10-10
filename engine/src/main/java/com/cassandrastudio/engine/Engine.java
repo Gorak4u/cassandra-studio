@@ -1,5 +1,6 @@
 package com.cassandrastudio.engine;
 
+import com.cassandrastudio.engine.alerts.AlertHub;
 import com.cassandrastudio.engine.audit.AuditLog;
 import com.cassandrastudio.engine.conn.ConnectionRepository;
 import com.cassandrastudio.engine.cql.ClusterService;
@@ -14,6 +15,7 @@ import com.cassandrastudio.engine.metrics.DriverTopology;
 import com.cassandrastudio.engine.metrics.MonitoringService;
 import com.cassandrastudio.engine.metrics.Topology;
 import com.cassandrastudio.engine.model.ConnectionConfig.SecretKeys;
+import com.cassandrastudio.engine.sched.ScheduleService;
 import com.cassandrastudio.engine.schema.SchemaService;
 import com.cassandrastudio.engine.secrets.SecretStore;
 import com.cassandrastudio.engine.security.RoleService;
@@ -49,6 +51,10 @@ public final class Engine implements AutoCloseable {
     public final JobService jobs;
     /** Phase 3: shell commands on nodes over SSH. */
     public final NodeShell shell;
+    /** Recurring jobs (SRV-5): repair, backup and report types register here; started by Main. */
+    public final ScheduleService schedules;
+    /** Alerts from every source, for notifications and routing (ALR-4, ALR-5). */
+    public final AlertHub alerts;
     private final List<AutoCloseable> closeables = new ArrayList<>();
     private final List<java.util.function.Consumer<String>> disconnectHooks = new ArrayList<>();
 
@@ -71,6 +77,8 @@ public final class Engine implements AutoCloseable {
         this.monitoring = new MonitoringService(db, connections, jmx, topology);
         this.jobs = new JobService(connections, audit);
         this.shell = new NodeShell();
+        this.schedules = new ScheduleService(db, jobs, java.time.ZoneId.systemDefault());
+        this.alerts = new AlertHub();
     }
 
     /** Every stored secret of a connection (CQL, JMX, SSH, truststore), by {@link SecretKeys} name. */
@@ -97,6 +105,7 @@ public final class Engine implements AutoCloseable {
             hooks = List.copyOf(disconnectHooks);
         }
         hooks.forEach(h -> h.accept(connectionId));
+        alerts.forget(connectionId);
         monitoring.stop(connectionId);
         jmx.closeConnection(connectionId);
         opsJmx.closeConnection(connectionId);
@@ -117,6 +126,7 @@ public final class Engine implements AutoCloseable {
                 // keep closing the rest
             }
         }
+        schedules.close();
         jobs.close();
         monitoring.close();
         jmx.close();

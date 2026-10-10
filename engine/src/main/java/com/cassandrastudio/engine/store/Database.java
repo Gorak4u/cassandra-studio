@@ -84,6 +84,34 @@ public final class Database implements AutoCloseable {
               key TEXT PRIMARY KEY,
               value TEXT NOT NULL
             );
+            """,
+            // 4: schedules (SRV-5) and their run history
+            """
+            CREATE TABLE schedules (
+              id TEXT PRIMARY KEY,
+              connection_id TEXT,
+              type TEXT NOT NULL,
+              name TEXT NOT NULL,
+              every_minutes INTEGER NOT NULL,
+              at_time TEXT,
+              window_start TEXT,
+              window_end TEXT,
+              enabled INTEGER NOT NULL DEFAULT 1,
+              params_json TEXT NOT NULL DEFAULT '{}',
+              next_run_ms INTEGER,
+              last_run_ms INTEGER,
+              last_outcome TEXT,
+              last_job_id TEXT
+            );
+            CREATE TABLE schedule_runs (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              schedule_id TEXT NOT NULL,
+              started_ms INTEGER NOT NULL,
+              job_id TEXT,
+              outcome TEXT NOT NULL,
+              detail TEXT
+            );
+            CREATE INDEX schedule_runs_schedule ON schedule_runs(schedule_id, id);
             """
     );
 
@@ -188,6 +216,11 @@ public final class Database implements AutoCloseable {
     /** The copy taken before the last migration in this process, or null. */
     public Path lastBackup() {
         return lastBackup;
+    }
+
+    /** The SQL of migration {@code version} (1-based); for tests that simulate an older file. */
+    static String migration(int version) {
+        return MIGRATIONS.get(version - 1);
     }
 
     public static int latestVersion() {

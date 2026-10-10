@@ -54,6 +54,7 @@ public final class Main {
         Engine engine = new Engine(db, secrets, System.getProperty("user.name", "unknown"));
         EngineServer server = new EngineServer(engine, new EngineServer.Options(host, port, token, uiDir, a.containsKey("dev-cors")));
 
+        engine.schedules.start();
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             server.close();
             engine.close();

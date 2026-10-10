@@ -64,9 +64,7 @@ class DatabaseTest {
             assertThat(db.lastBackup()).isNull(); // a new database needs no copy
             db.update("INSERT INTO folders(id, name) VALUES ('f1', 'acme')");
             // pretend this file is from the release before the latest migration
-            db.update("DELETE FROM schema_version WHERE version = ?", Database.latestVersion());
-            db.update("DROP TABLE saved_scripts");
-            db.update("DROP TABLE settings");
+            undoLatestMigration(db);
         }
         try (Database db = Database.open(dir)) {
             assertThat(db.schemaVersion()).isEqualTo(Database.latestVersion());
@@ -91,9 +89,7 @@ class DatabaseTest {
     void keepsOnlyTheLatestBackups() throws Exception {
         for (int i = 0; i < Database.KEEP_BACKUPS + 3; i++) {
             try (Database db = Database.open(dir)) {
-                db.update("DELETE FROM schema_version WHERE version = ?", Database.latestVersion());
-                db.update("DROP TABLE saved_scripts");
-                db.update("DROP TABLE settings");
+                undoLatestMigration(db);
             }
             try (Database db = Database.open(dir)) {
                 assertThat(db.lastBackup()).isNotNull();
@@ -127,5 +123,15 @@ class DatabaseTest {
             })).hasMessage("boom");
             assertThat(db.query("SELECT * FROM settings")).isEmpty();
         }
+    }
+
+    /** Makes the file look like the release before the latest migration: drops what that migration created. */
+    private static void undoLatestMigration(Database db) {
+        db.update("DELETE FROM schema_version WHERE version = ?", Database.latestVersion());
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("CREATE (TABLE|INDEX) (\\w+)")
+                .matcher(Database.migration(Database.latestVersion()));
+        java.util.List<String> drops = new java.util.ArrayList<>();
+        while (m.find()) drops.add(0, "DROP " + m.group(1) + " IF EXISTS " + m.group(2));
+        drops.forEach(db::update);
     }
 }
