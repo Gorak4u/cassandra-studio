@@ -8,7 +8,8 @@ import type { AccessStatus, Alert, ClusterSnapshot, Ring, Series, SeriesMetric, 
  */
 export type Thresholds = Record<string, number | null>;
 
-export interface SeriesQuery { node?: string | null; fromMs?: number; toMs?: number }
+/** maxPoints: at most this many points per node, downsampled by the engine (keeps peaks). */
+export interface SeriesQuery { node?: string | null; fromMs?: number; toMs?: number; maxPoints?: number }
 
 /** Every route in docs/api/monitoring.md for one connection. */
 export interface MonitoringClient {
@@ -90,7 +91,7 @@ export function engineMonitoring(connectionId: string): MonitoringClient {
       }
     },
     series: (metric, q = {}) =>
-      request<Series>("GET", `${p}/series${qs({ metric, node: q.node, fromMs: q.fromMs, toMs: q.toMs })}`),
+      request<Series>("GET", `${p}/series${qs({ metric, node: q.node, fromMs: q.fromMs, toMs: q.toMs, maxPoints: q.maxPoints })}`),
     ring: (keyspace) => request<Ring>("GET", `${p}/ring${qs({ keyspace })}`),
     tables: (keyspace) => request<TableMetrics[]>("GET", `${p}/tables${qs({ keyspace })}`),
     alerts: () => request<Alert[]>("GET", `${p}/alerts`),

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import { api } from "./lib/api";
 import type { ConnectionConfig, EngineInfo, Folder } from "./lib/types";
 import { ConnectionTree } from "./components/ConnectionTree";
@@ -8,6 +8,10 @@ import { Workspace } from "./panels/Workspace";
 import { AuditPanel } from "./panels/HistoryPanel";
 import { download } from "./lib/export";
 import { AppSettings } from "./panels/settings/AppSettings";
+import {
+  autoConnectOnRestore, clampSidebar, debounced, EMPTY_UI_STATE, pruneUiState, SIDEBAR_MAX, SIDEBAR_MIN, studioApi, type UiState,
+} from "./lib/studioApi";
+import { StudioDataDialog, uiErrors } from "./components/StudioDataDialog";
 
 type Theme = "light" | "dark";
 
@@ -21,6 +25,38 @@ function initialTheme(): Theme {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+/** Errors in one view stay in that view; they are written to the local crash log (NFR-OBS). */
+class ViewBoundary extends Component<{ name: string; children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    reportUiError(`${this.props.name}: ${error.message}`, error.stack, info.componentStack ?? undefined);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="pad" role="alert">
+        <div className="notice error">This view stopped because of an error: {this.state.error.message}. It was written to the local crash log.</div>
+        <button className="btn" onClick={() => this.setState({ error: null })}>Reload view</button>
+      </div>
+    );
+  }
+}
+
+let reported = 0;
+/** Sends a UI error to the engine's local crash log (at most 50 per window) and keeps it for "Copy diagnostics". */
+function reportUiError(message: string, stack?: string, componentStack?: string) {
+  uiErrors.push(message.slice(0, 500));
+  if (uiErrors.length > 20) uiErrors.shift();
+  if (reported++ >= 50) return;
+  studioApi.reportUiError({ message, stack, componentStack }).catch(() => undefined);
+}
+
 export function App() {
   const toast = useToast();
   const [info, setInfo] = useState<EngineInfo | null>(null);
@@ -32,7 +68,29 @@ export function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState<ConnectionConfig | null>(null);
   const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [studioData, setStudioData] = useState(false);
   const importInput = useRef<HTMLInputElement | null>(null);
+  // Remembered layout (NFR-UX): restored once at start, then saved (debounced) on every change.
+  const [restored, setRestored] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [sidebarWidth, setSidebarWidth] = useState(clampSidebar(undefined));
+  const [tabs, setTabs] = useState<UiState["workspaces"]>({});
+  const restoredState = useRef<UiState>(EMPTY_UI_STATE);
+  const saver = useMemo(() => debounced((st: UiState) => { studioApi.saveUiState(st).catch(() => undefined); }, 400), []);
+
+  useEffect(() => {
+    const onError = (e: ErrorEvent) => reportUiError(e.message || "Script error", e.error instanceof Error ? e.error.stack : undefined);
+    const onRejection = (e: PromiseRejectionEvent) => {
+      const r = e.reason;
+      reportUiError("Unhandled promise rejection: " + (r instanceof Error ? r.message : String(r)), r instanceof Error ? r.stack : undefined);
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    };
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -51,10 +109,39 @@ export function App() {
 
   useEffect(() => {
     api.info().then(setInfo).catch(toast.error);
-    reload();
-  }, [reload, toast]);
+    Promise.all([api.folders(), api.connections(), studioApi.uiState().catch(() => EMPTY_UI_STATE)])
+      .then(([f, c, saved]) => {
+        setFolders(f);
+        setConnections(c);
+        const st = pruneUiState(saved, new Set(c.map((x) => x.id!)), new Set(f.map((x) => x.id)));
+        restoredState.current = st;
+        setOpen(st.open);
+        setActive(st.active);
+        setTabs(st.workspaces);
+        setCollapsed(new Set(st.collapsed));
+        setSidebarWidth(clampSidebar(st.sidebarWidth));
+      })
+      .catch(toast.error)
+      .finally(() => setRestored(true));
+  }, [toast]);
+
+  useEffect(() => {
+    if (!restored) return;
+    saver.push({
+      v: 1, open, active, connected: [...connected].filter((id) => open.includes(id)), workspaces: tabs,
+      collapsed: [...collapsed], sidebarWidth,
+    });
+  }, [restored, open, active, connected, tabs, collapsed, sidebarWidth, saver]);
+  useEffect(() => {
+    const flush = () => saver.flush();
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
+  }, [saver]);
+
+  const onTabChange = useCallback((id: string, tab: string) => setTabs((t) => ({ ...t, [id]: { tab } })), []);
 
   const openConn = (c: ConnectionConfig) => {
+    restoredState.current = { ...restoredState.current, open: restoredState.current.open.filter((x) => x !== c.id) };
     setOpen((o) => (o.includes(c.id!) ? o : [...o, c.id!]));
     setActive(c.id!);
   };
@@ -80,8 +167,24 @@ export function App() {
   const byId = new Map(connections.map((c) => [c.id!, c]));
   const activeConn = active && active !== "audit" ? byId.get(active) : undefined;
 
+  // Left pane width: drag the divider or use the arrow keys on it.
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const move = (ev: PointerEvent) => setSidebarWidth(clampSidebar(ev.clientX));
+    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  const resizeKey = (e: React.KeyboardEvent) => {
+    const step = e.shiftKey ? 50 : 10;
+    if (e.key === "ArrowLeft") setSidebarWidth((w) => clampSidebar(w - step));
+    else if (e.key === "ArrowRight") setSidebarWidth((w) => clampSidebar(w + step));
+    else return;
+    e.preventDefault();
+  };
+
   return (
-    <div className="app">
+    <div className="app" style={{ gridTemplateColumns: `${sidebarWidth}px 1fr` }}>
       <header className="topbar">
         <span className="brand">Cassandra Studio</span>
         <span className="muted">{info ? `v${info.version}` : ""}</span>
@@ -89,6 +192,7 @@ export function App() {
         <button className="btn small" onClick={() => setActive("audit")}>Audit log</button>
         <button className="btn small" onClick={() => api.exportConnections().then((d) => download("cassandra-studio-connections.json", JSON.stringify(d, null, 2), "application/json")).catch(toast.error)}>Export connections</button>
         <button className="btn small" onClick={() => importInput.current?.click()}>Import</button>
+        <button className="btn small" onClick={() => setStudioData(true)} title="Back up or restore Studio's settings, copy diagnostics">Studio data</button>
         <input ref={importInput} type="file" accept=".json" hidden onChange={(e) => e.target.files?.[0] && importFile(e.target.files[0])} />
         <AppSettings />
         <button className="btn small" aria-label="Toggle dark mode" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
@@ -97,6 +201,8 @@ export function App() {
       </header>
       <aside className="sidebar">
         <ConnectionTree
+          collapsed={collapsed}
+          onCollapsedChange={setCollapsed}
           folders={folders}
           connections={connections}
           connected={connected}
@@ -130,6 +236,20 @@ export function App() {
           {info && <>Secrets: {info.secretStore} · user {info.actor}</>}
         </div>
       </aside>
+      <div
+        className="pane-resizer"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize connections pane"
+        aria-valuemin={SIDEBAR_MIN}
+        aria-valuemax={SIDEBAR_MAX}
+        aria-valuenow={sidebarWidth}
+        tabIndex={0}
+        onPointerDown={startResize}
+        onKeyDown={resizeKey}
+        onDoubleClick={() => setSidebarWidth(clampSidebar(undefined))}
+        style={{ position: "fixed", top: 40, bottom: 0, left: sidebarWidth - 3, width: 6, cursor: "col-resize", zIndex: 5 }}
+      />
       <main className="main">
         <div className="tabs">
           {open.map((id) => {
@@ -149,11 +269,20 @@ export function App() {
             const c = byId.get(id);
             return c ? (
               <div key={id} style={{ display: active === id ? "block" : "none", height: "100%" }}>
-                <Workspace conn={c} dark={theme === "dark"} onConnected={onConnected} />
+                <ViewBoundary name={c.name}>
+                  <Workspace
+                    conn={c}
+                    dark={theme === "dark"}
+                    onConnected={onConnected}
+                    initialTab={tabs[id]?.tab}
+                    onTabChange={onTabChange}
+                    autoConnect={!restoredState.current.open.includes(id) || autoConnectOnRestore(restoredState.current, id, c.environment)}
+                  />
+                </ViewBoundary>
               </div>
             ) : null;
           })}
-          {active === "audit" && <AuditPanel />}
+          {active === "audit" && <ViewBoundary name="Audit log"><AuditPanel /></ViewBoundary>}
           {!activeConn && active !== "audit" && (
             <div className="empty">
               <h2>Cassandra Studio</h2>
@@ -162,6 +291,7 @@ export function App() {
           )}
         </div>
       </main>
+      {studioData && <StudioDataDialog onClose={() => setStudioData(false)} onRestored={reload} />}
       {editing && (
         <ConnectionDialog
           initial={editing}

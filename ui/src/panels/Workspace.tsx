@@ -15,24 +15,46 @@ import { ConfigPanel } from "./config/ConfigPanel";
 import { BackupPanel } from "./backup/BackupPanel";
 import { BulkPanel } from "./bulk/BulkPanel";
 
-type Tab = "overview" | "monitoring" | "query" | "schema" | "roles" | "history"
+export type Tab = "overview" | "monitoring" | "query" | "schema" | "roles" | "history"
   | "operations" | "diagnostics" | "gclogs" | "config" | "backups" | "bulk";
 
-/** One open cluster: its tabs share the connection and cluster info (CON-11). */
-export function Workspace(props: { conn: ConnectionConfig; dark: boolean; onConnected: (id: string, ok: boolean) => void }) {
-  const [tab, setTab] = useState<Tab>("query");
+export const WORKSPACE_TABS: [Tab, string][] = [
+  ["overview", "Overview"], ["monitoring", "Monitoring"], ["query", "Query"], ["schema", "Schema"], ["roles", "Users & roles"], ["operations", "Operations"], ["diagnostics", "Diagnostics"], ["gclogs", "GC logs"], ["config", "Config"], ["backups", "Backups"], ["bulk", "Bulk"], ["history", "History"],
+];
+
+function isTab(t: string | undefined): t is Tab {
+  return !!t && WORKSPACE_TABS.some(([k]) => k === t);
+}
+
+/**
+ * One open cluster: its tabs share the connection and cluster info (CON-11). The active tab is
+ * remembered across launches (NFR-UX); {@code autoConnect} false (a restored PROD tab that was not
+ * connected when Studio closed) waits for an explicit Connect.
+ */
+export function Workspace(props: {
+  conn: ConnectionConfig; dark: boolean; onConnected: (id: string, ok: boolean) => void;
+  initialTab?: string; onTabChange?: (id: string, tab: Tab) => void; autoConnect?: boolean;
+}) {
+  const [tab, setTabState] = useState<Tab>(isTab(props.initialTab) ? props.initialTab : "query");
   const [info, setInfo] = useState<ClusterInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [waiting, setWaiting] = useState(props.autoConnect === false);
   const [openText, setOpenText] = useState<{ text: string; seq: number } | null>(null);
-  const { onConnected } = props;
+  const { onConnected, onTabChange } = props;
+  const setTab = useCallback((t: Tab) => {
+    setTabState(t);
+    onTabChange?.(props.conn.id!, t);
+  }, [onTabChange, props.conn.id]);
 
   const connect = useCallback(() => {
     setError(null);
+    setWaiting(false);
     api.connect(props.conn.id!)
       .then((i) => { setInfo(i); onConnected(props.conn.id!, true); })
       .catch((e) => { setError(errorText(e)); onConnected(props.conn.id!, false); });
   }, [props.conn.id, onConnected]);
-  useEffect(connect, [connect]);
+  const autoConnect = props.autoConnect !== false;
+  useEffect(() => { if (autoConnect) connect(); }, [connect]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep topology current: nodes that join, leave or go down after connecting show up without a manual refresh.
   useEffect(() => {
@@ -48,9 +70,7 @@ export function Workspace(props: { conn: ConnectionConfig; dark: boolean; onConn
     setTab("query");
   };
 
-  const tabs: [Tab, string][] = [
-    ["overview", "Overview"], ["monitoring", "Monitoring"], ["query", "Query"], ["schema", "Schema"], ["roles", "Users & roles"], ["operations", "Operations"], ["diagnostics", "Diagnostics"], ["gclogs", "GC logs"], ["config", "Config"], ["backups", "Backups"], ["bulk", "Bulk"], ["history", "History"],
-  ];
+  const tabs = WORKSPACE_TABS;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -64,7 +84,14 @@ export function Workspace(props: { conn: ConnectionConfig; dark: boolean; onConn
         ))}
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
-        {error ? (
+        {waiting ? (
+          <div className="pad">
+            <div className="notice" data-testid="restore-connect">
+              {props.conn.name} is a production cluster and was not connected when Studio closed, so it was not reconnected automatically.
+            </div>
+            <button className="btn primary" onClick={connect}>Connect</button>
+          </div>
+        ) : error ? (
           <div className="pad">
             <div className="notice error" data-testid="connect-error">{error}</div>
             <button className="btn" onClick={connect}>Retry</button>

@@ -326,7 +326,7 @@ function LoadForm(props: { id: string; keyspaces: SchemaTree["keyspaces"]; readO
   const [tsMode, setTsMode] = useState<"none" | "fixed" | "field">("none");
   const [ts, setTs] = useState("");
   const [batchSize, setBatchSize] = useState("32");
-  const [concurrency, setConcurrency] = useState("16");
+  const [concurrency, setConcurrency] = useState("64");
   const [rateLimit, setRateLimit] = useState("");
   const [maxErrors, setMaxErrors] = useState("100");
   const [consistency, setConsistency] = useState("LOCAL_QUORUM");

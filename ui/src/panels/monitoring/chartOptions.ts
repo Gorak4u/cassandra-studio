@@ -49,6 +49,57 @@ export function chartNodes(spec: ChartSpec, data: SeriesData, styles: Map<string
   return [...styles.keys()].filter((a) => present.has(a) && (!visible || visible.has(a)));
 }
 
+/** Above this many nodes a chart draws per-datacenter max and mean instead of one line per node (NFR-SCALE). */
+export const MAX_NODE_LINES = 24;
+const AGG_SLOTS = 240;
+
+/** How large clusters are drawn: each node's datacenter and a colour per datacenter. */
+export interface DcAggregation { dcOf: Map<string, string>; colors: Map<string, string> }
+
+export function aggregated(nodeCount: number, agg: DcAggregation | undefined): agg is DcAggregation {
+  return !!agg && nodeCount > MAX_NODE_LINES;
+}
+
+/**
+ * Per datacenter, the max and the mean over its nodes on a fixed time grid ({@value AGG_SLOTS}
+ * slots), so a 500-node chart draws a handful of lines. Slots without points are gaps (null).
+ */
+export function aggregateByDc(
+  pointsByNode: Record<string, [number, number][]>, nodes: string[], dcOf: Map<string, string>, range: { fromMs: number; toMs: number },
+): Map<string, { max: [number, number | null][]; mean: [number, number | null][] }> {
+  const step = Math.max(1, (range.toMs - range.fromMs) / AGG_SLOTS);
+  const acc = new Map<string, { max: Float64Array; sum: Float64Array; n: Uint32Array }>();
+  for (const a of nodes) {
+    const dc = dcOf.get(a) ?? "unknown";
+    let g = acc.get(dc);
+    if (!g) {
+      g = { max: new Float64Array(AGG_SLOTS + 1).fill(-Infinity), sum: new Float64Array(AGG_SLOTS + 1), n: new Uint32Array(AGG_SLOTS + 1) };
+      acc.set(dc, g);
+    }
+    for (const [t, v] of pointsByNode[a] ?? []) {
+      if (v === null || !Number.isFinite(v)) continue;
+      const i = Math.floor((t - range.fromMs) / step);
+      if (i < 0 || i > AGG_SLOTS) continue;
+      if (v > g.max[i]) g.max[i] = v;
+      g.sum[i] += v;
+      g.n[i]++;
+    }
+  }
+  const out = new Map<string, { max: [number, number | null][]; mean: [number, number | null][] }>();
+  for (const dc of [...acc.keys()].sort()) {
+    const g = acc.get(dc)!;
+    const max: [number, number | null][] = [];
+    const mean: [number, number | null][] = [];
+    for (let i = 0; i <= AGG_SLOTS; i++) {
+      const t = range.fromMs + (i + 0.5) * step;
+      max.push([t, g.n[i] ? g.max[i] : null]);
+      mean.push([t, g.n[i] ? g.sum[i] / g.n[i] : null]);
+    }
+    out.set(dc, { max, mean });
+  }
+  return out;
+}
+
 export function buildLineOption(
   spec: ChartSpec,
   data: SeriesData,
@@ -56,10 +107,24 @@ export function buildLineOption(
   visible: Set<string> | null,
   theme: ChartTheme,
   range: { fromMs: number; toMs: number },
+  agg?: DcAggregation,
 ): LineOption {
   const fmt = formatterFor(spec.unit);
   const nodes = chartNodes(spec, data, styles, visible);
-  const series: LineSeriesOption[] = spec.lines.flatMap((line) =>
+  const multi = spec.lines.length > 1;
+  const series: LineSeriesOption[] = aggregated(nodes.length, agg) ? spec.lines.flatMap((line) => {
+    const out: LineSeriesOption[] = [];
+    aggregateByDc(data[line.metric]?.pointsByNode ?? {}, nodes, agg.dcOf, range).forEach((g, dc) => {
+      const color = agg.colors.get(dc) ?? theme.text;
+      const base = { type: "line" as const, showSymbol: false, symbolSize: 8, connectNulls: false, color, emphasis: { focus: "series" as const } };
+      out.push({ ...base, name: `${dc} max${multi ? " " + line.label : ""}`, data: g.max,
+        lineStyle: { width: 2, color, type: line.dashed ? "dashed" : "solid" } });
+      if (!line.dashed) {
+        out.push({ ...base, name: `${dc} mean${multi ? " " + line.label : ""}`, data: g.mean, lineStyle: { width: 1.5, color, type: "dotted" } });
+      }
+    });
+    return out;
+  }) : spec.lines.flatMap((line) =>
     nodes.map((address) => {
       const st = styles.get(address)!;
       return {
@@ -140,10 +205,13 @@ export function tooltipHtml(params: TooltipParam[], fmt: (v: number | null) => s
 }
 
 /** Text alternative for a chart (role="img" aria-label). */
-export function chartSummary(spec: ChartSpec, data: SeriesData, styles: Map<string, NodeStyle>, visible: Set<string> | null, rangeLabel: string): string {
+export function chartSummary(spec: ChartSpec, data: SeriesData, styles: Map<string, NodeStyle>, visible: Set<string> | null, rangeLabel: string, agg?: DcAggregation): string {
   const fmt = formatterFor(spec.unit);
   const nodes = chartNodes(spec, data, styles, visible);
   if (!nodes.length) return `${spec.title}, last ${rangeLabel}: no data.`;
+  if (aggregated(nodes.length, agg)) {
+    return `${spec.title}, last ${rangeLabel}, ${nodes.length} nodes drawn as maximum and mean per datacenter.`;
+  }
   const main = spec.lines[0];
   const latest = nodes.slice(0, 8).map((a) => {
     const pts = data[main.metric]?.pointsByNode[a] ?? [];

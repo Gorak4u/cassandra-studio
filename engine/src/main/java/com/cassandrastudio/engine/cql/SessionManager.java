@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -50,6 +52,8 @@ public final class SessionManager implements AutoCloseable {
 
     private final ConnectionRepository connections;
     private final Map<String, CqlSession> sessions = new ConcurrentHashMap<>();
+    /** Connects under way, per connection: concurrent callers share one attempt. */
+    private final Map<String, CompletableFuture<CqlSession>> opening = new ConcurrentHashMap<>();
     /** Per connection, keyspace sessions in access order (LRU). Guarded by {@code this}. */
     private final Map<String, Map<String, CqlSession>> keyspaceSessions = new ConcurrentHashMap<>();
 
@@ -57,17 +61,44 @@ public final class SessionManager implements AutoCloseable {
         this.connections = connections;
     }
 
-    /** Opens (or returns) the session for a saved connection. */
+    /**
+     * Opens (or returns) the session for a saved connection. Connecting happens outside any shared
+     * lock: an unreachable or hung cluster never holds up other clusters, and requests that arrive
+     * while a connect is under way wait for that same attempt instead of queueing their own (NFR-RELI).
+     */
     public CqlSession session(String connectionId) {
         CqlSession s = sessions.get(connectionId);
         if (s != null && !s.isClosed()) return s;
-        synchronized (this) {
+        ConnectionConfig cfg = connections.get(connectionId);
+        CompletableFuture<CqlSession> mine = new CompletableFuture<>();
+        CompletableFuture<CqlSession> running = opening.putIfAbsent(connectionId, mine);
+        if (running != null) {
+            try {
+                return running.join();
+            } catch (CompletionException e) {
+                throw e.getCause() instanceof RuntimeException r ? r : e;
+            }
+        }
+        try {
             s = sessions.get(connectionId);
-            if (s != null && !s.isClosed()) return s;
-            ConnectionConfig cfg = connections.get(connectionId);
-            s = open(cfg, secretsOf(cfg), null);
-            sessions.put(connectionId, s);
+            if (s == null || s.isClosed()) {
+                CqlSession opened = open(cfg, secretsOf(cfg), null);
+                synchronized (this) {
+                    if (opening.get(connectionId) != mine) { // disconnected while connecting
+                        opened.closeAsync();
+                        throw new ApiException(409, "disconnected", "Disconnected while connecting to " + cfg.name());
+                    }
+                    sessions.put(connectionId, opened);
+                }
+                s = opened;
+            }
+            mine.complete(s);
             return s;
+        } catch (RuntimeException e) {
+            mine.completeExceptionally(e);
+            throw e;
+        } finally {
+            opening.remove(connectionId, mine);
         }
     }
 
@@ -114,6 +145,7 @@ public final class SessionManager implements AutoCloseable {
     }
 
     public synchronized void disconnect(String connectionId) {
+        opening.remove(connectionId); // a connect still under way closes its session when it ends
         CqlSession s = sessions.remove(connectionId);
         if (s != null) s.closeAsync();
         Map<String, CqlSession> byKs = keyspaceSessions.remove(connectionId);

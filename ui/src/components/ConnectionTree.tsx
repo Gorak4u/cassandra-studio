@@ -17,9 +17,18 @@ export function ConnectionTree(props: {
   onRenameFolder: (f: Folder) => void;
   onDeleteFolder: (f: Folder) => void;
   onMoveConnection: (c: ConnectionConfig, folderId: string | null) => void;
+  /** Collapsed folder ids, when the parent remembers them (NFR-UX); otherwise kept here. */
+  collapsed?: Set<string>;
+  onCollapsedChange?: (collapsed: Set<string>) => void;
 }) {
   const [filter, setFilter] = useState("");
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [ownCollapsed, setOwnCollapsed] = useState<Set<string>>(new Set());
+  const collapsed = props.collapsed ?? ownCollapsed;
+  const setCollapsed = (f: (s: Set<string>) => Set<string>) => {
+    const next = f(collapsed);
+    if (props.onCollapsedChange) props.onCollapsedChange(next);
+    else setOwnCollapsed(next);
+  };
   const [dragOver, setDragOver] = useState<string | null>(null);
 
   const f = filter.trim().toLowerCase();

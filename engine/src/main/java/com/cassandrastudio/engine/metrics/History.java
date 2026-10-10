@@ -53,10 +53,23 @@ public final class History {
         return tracks.values().stream().mapToInt(Track::size).sum();
     }
 
-    /** One series: raw points (last hour) and closed minute buckets (up to 24 h). */
+    /** Approximate heap bytes held by all series (NFR-SCALE measurements). */
+    public long approxBytes() {
+        return tracks.values().stream().mapToLong(Track::bytes).sum();
+    }
+
+    /**
+     * One series: raw points (last hour) and closed minute buckets (up to 24 h). Minute means are
+     * kept as floats in a fixed slot per minute of the day (4 bytes a point, no timestamps), which
+     * keeps 24 h for a 500-node cluster at about a third of the memory of (time, value) pairs.
+     */
     static final class Track {
+        static final int SLOTS = (int) (RETENTION_MS / MINUTE_MS) + 1;
         private final Ring raw = new Ring();
-        private final Ring minutes = new Ring();
+        /** Mean per minute at slot floorMod(minute, SLOTS); NaN = no point. Allocated on the first closed minute. */
+        private float[] minuteMeans;
+        /** Minute index (time / 60 s) of the newest closed bucket; -1 = none. */
+        private long newestMinute = -1;
         private long bucketStart = -1;
         private double bucketSum;
         private int bucketN;
@@ -70,23 +83,47 @@ public final class History {
             bucketN++;
             raw.add(at, v);
             raw.dropBefore(at - RAW_MS);
-            minutes.dropBefore(at - RETENTION_MS);
         }
 
         private void closeBucket() {
-            if (bucketN > 0) minutes.add(bucketStart, bucketSum / bucketN);
+            if (bucketN > 0) {
+                if (minuteMeans == null) {
+                    minuteMeans = new float[SLOTS];
+                    java.util.Arrays.fill(minuteMeans, Float.NaN);
+                }
+                long m = bucketStart / MINUTE_MS;
+                // minutes without a point since the newest bucket (polling paused, node unreadable)
+                if (newestMinute >= 0) {
+                    for (long g = newestMinute + 1; g < m && g <= newestMinute + SLOTS; g++) {
+                        minuteMeans[Math.floorMod(g, SLOTS)] = Float.NaN;
+                    }
+                }
+                minuteMeans[Math.floorMod(m, SLOTS)] = (float) (bucketSum / bucketN);
+                newestMinute = m;
+            }
             bucketSum = 0;
             bucketN = 0;
+        }
+
+        /** First minute index still inside the retention, relative to the newest raw point. */
+        private long oldestMinute() {
+            long cutoff = raw.size() == 0 ? Long.MIN_VALUE : raw.lastTime() - RETENTION_MS;
+            long oldest = newestMinute - SLOTS + 1;
+            long byTime = cutoff == Long.MIN_VALUE ? oldest : Math.floorDiv(cutoff + MINUTE_MS - 1, MINUTE_MS);
+            return Math.max(oldest, byTime);
         }
 
         synchronized List<double[]> query(long from, long to) {
             List<double[]> out = new ArrayList<>();
             long rawStart = raw.size() == 0 ? Long.MAX_VALUE : raw.firstTime();
             // minute points only where raw points no longer exist
-            for (int i = 0; i < minutes.size(); i++) {
-                long t = minutes.time(i);
-                if (t + MINUTE_MS > rawStart) break;
-                if (t >= from && t <= to) out.add(new double[] {t, minutes.value(i)});
+            if (minuteMeans != null) {
+                for (long m = oldestMinute(); m <= newestMinute; m++) {
+                    long t = m * MINUTE_MS;
+                    if (t + MINUTE_MS > rawStart) break;
+                    float v = minuteMeans[Math.floorMod(m, SLOTS)];
+                    if (!Float.isNaN(v) && t >= from && t <= to) out.add(new double[] {t, v});
+                }
             }
             for (int i = 0; i < raw.size(); i++) {
                 long t = raw.time(i);
@@ -96,7 +133,18 @@ public final class History {
         }
 
         synchronized int size() {
-            return raw.size() + minutes.size();
+            int n = raw.size();
+            if (minuteMeans != null) {
+                for (long m = oldestMinute(); m <= newestMinute; m++) {
+                    if (!Float.isNaN(minuteMeans[Math.floorMod(m, SLOTS)])) n++;
+                }
+            }
+            return n;
+        }
+
+        /** Approximate bytes held, for the scale tests. */
+        synchronized long bytes() {
+            return raw.capacity() * 16L + (minuteMeans == null ? 0 : minuteMeans.length * 4L) + 64;
         }
     }
 
@@ -121,9 +169,11 @@ public final class History {
             }
         }
 
+        /** Grows by half: an hour of 10 s points (361) fits in 486 slots instead of 512. */
         private void grow() {
-            long[] nt = new long[t.length * 2];
-            double[] nv = new double[v.length * 2];
+            int cap = t.length + t.length / 2;
+            long[] nt = new long[cap];
+            double[] nv = new double[cap];
             for (int i = 0; i < size; i++) {
                 nt[i] = t[(head + i) % t.length];
                 nv[i] = v[(head + i) % v.length];
@@ -135,6 +185,10 @@ public final class History {
 
         int size() {
             return size;
+        }
+
+        int capacity() {
+            return t.length;
         }
 
         long time(int i) {

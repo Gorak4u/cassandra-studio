@@ -38,6 +38,8 @@ export function MonitoringPanel(props: { conn: ConnectionConfig; info: ClusterIn
   const addressKey = (m.snapshot?.nodes.map((n) => n.address) ?? []).join(",");
   const styles = useMemo(() => nodeStyles(addressKey ? addressKey.split(",") : [], props.dark), [addressKey, props.dark]);
   const problem = accessProblem(m.status, m.snapshot?.nodes ?? null);
+  const dcKey = (m.snapshot?.nodes.map((n) => `${n.address}=${n.datacenter ?? ""}`) ?? []).join(",");
+  const dcOf = useMemo(() => new Map(dcKey ? dcKey.split(",").map((x) => x.split("=") as [string, string]) : []), [dcKey]);
 
   const onTabKey = (e: KeyboardEvent) => {
     const i = VIEWS.findIndex(([k]) => k === view);
@@ -55,7 +57,7 @@ export function MonitoringPanel(props: { conn: ConnectionConfig; info: ClusterIn
     body = m.error ? <ErrorState error={m.error} onRetry={m.paused ? m.resume : m.refresh} /> : m.paused ? <div className="empty">Monitoring is paused.</div> : <Loading what="the first poll" />;
   } else if (view === "health") body = <HealthView snapshot={m.snapshot!} info={props.info} onNode={setSelected} />;
   else if (view === "nodes") body = <NodesView nodes={m.snapshot!.nodes} alerts={m.snapshot!.alerts} styles={styles} onNode={setSelected} />;
-  else if (view === "charts") body = <ChartsView client={client} styles={styles} dark={props.dark} tick={m.tick} group={`monitoring-${id}`} />;
+  else if (view === "charts") body = <ChartsView client={client} styles={styles} dark={props.dark} tick={m.tick} group={`monitoring-${id}`} dcOf={dcOf} />;
   else if (view === "ring") body = <RingView client={client} styles={styles} dark={props.dark} nodes={m.snapshot!.nodes} onNode={setSelected} />;
   else if (view === "tables") body = <TablesView client={client} />;
   else body = <ThresholdsView client={client} />;

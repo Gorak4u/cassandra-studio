@@ -87,26 +87,42 @@ public final class Database implements AutoCloseable {
             """
     );
 
-    private final Connection conn;
+    /** Copies taken before a migration that are kept in {@code <data dir>/backups}; older ones are deleted. */
+    static final int KEEP_BACKUPS = 5;
+    public static final String FILE_NAME = "studio.db";
 
-    private Database(Connection conn) {
+    private final Connection conn;
+    /** Where pre-migration copies go; null for in-memory databases. */
+    private final Path backupDir;
+    private volatile Path lastBackup;
+
+    private Database(Connection conn, Path backupDir) {
         this.conn = conn;
+        this.backupDir = backupDir;
     }
 
+    /**
+     * Opens (creating if needed) {@code <dataDir>/studio.db} and migrates it to the latest version,
+     * copying it to {@code <dataDir>/backups} first. A database written by a newer Studio is refused
+     * before anything is written to it: it is probed through an immutable read-only handle, so not
+     * even the journal mode or a lock file changes (NFR-DATA).
+     */
     public static Database open(Path dataDir) {
+        Path file = dataDir.resolve(FILE_NAME).toAbsolutePath();
         try {
             Files.createDirectories(dataDir);
-            return open("jdbc:sqlite:" + dataDir.resolve("studio.db").toAbsolutePath());
         } catch (java.io.IOException e) {
             throw new IllegalStateException("Cannot create data directory " + dataDir, e);
         }
+        if (Files.exists(file)) refuseIfNewer(probeVersion(file));
+        return open("jdbc:sqlite:" + file, dataDir.resolve("backups"));
     }
 
     public static Database inMemory() {
-        return open("jdbc:sqlite::memory:");
+        return open("jdbc:sqlite::memory:", null);
     }
 
-    private static Database open(String url) {
+    private static Database open(String url, Path backupDir) {
         try {
             Connection c = DriverManager.getConnection(url);
             try (Statement st = c.createStatement()) {
@@ -114,12 +130,64 @@ public final class Database implements AutoCloseable {
                 st.execute("PRAGMA journal_mode = WAL");
                 st.execute("PRAGMA busy_timeout = 5000");
             }
-            Database db = new Database(c);
-            db.migrate();
+            Database db = new Database(c, backupDir);
+            try {
+                db.migrate();
+            } catch (SQLException | RuntimeException e) {
+                db.close();
+                throw e;
+            }
             return db;
         } catch (SQLException e) {
-            throw new IllegalStateException("Cannot open Studio database " + url, e);
+            throw new IllegalStateException("Cannot open Studio database " + url + ": " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * The schema version of an existing file, read without writing anything: {@code immutable=1}
+     * creates no -wal/-shm files and takes no locks. When a -wal file is left over (a crash), a plain
+     * read-only open is used instead so its committed pages are seen.
+     */
+    static int probeVersion(Path file) {
+        Path wal = file.resolveSibling(file.getFileName() + "-wal");
+        boolean walPending;
+        try {
+            walPending = Files.exists(wal) && Files.size(wal) > 0;
+        } catch (java.io.IOException e) {
+            walPending = true;
+        }
+        String url = "jdbc:sqlite:" + file.toUri() + (walPending ? "?mode=ro" : "?mode=ro&immutable=1");
+        try (Connection c = DriverManager.getConnection(url); Statement st = c.createStatement();
+             ResultSet t = st.executeQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_version'")) {
+            if (!t.next()) return 0;
+            try (ResultSet rs = st.executeQuery("SELECT MAX(version) FROM schema_version")) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Cannot read Studio database " + file + ": " + e.getMessage()
+                    + ". It is left unchanged; move it away to start with an empty one.", e);
+        }
+    }
+
+    private static void refuseIfNewer(int version) {
+        if (version > MIGRATIONS.size()) {
+            throw new NewerDatabaseException("Studio database is version " + version
+                    + " but this Studio only knows up to " + MIGRATIONS.size()
+                    + ". It was written by a newer Studio; upgrade Studio instead of downgrading."
+                    + " The database was not changed.");
+        }
+    }
+
+    /** The database was written by a newer Studio; it was left untouched. */
+    public static final class NewerDatabaseException extends IllegalStateException {
+        NewerDatabaseException(String message) {
+            super(message);
+        }
+    }
+
+    /** The copy taken before the last migration in this process, or null. */
+    public Path lastBackup() {
+        return lastBackup;
     }
 
     public static int latestVersion() {
@@ -139,11 +207,8 @@ public final class Database implements AutoCloseable {
 
     private synchronized void migrate() throws SQLException {
         int current = schemaVersion();
-        if (current > MIGRATIONS.size()) {
-            throw new IllegalStateException("Studio database is version " + current
-                    + " but this Studio only knows up to " + MIGRATIONS.size()
-                    + ". It was written by a newer Studio; upgrade Studio instead of downgrading.");
-        }
+        refuseIfNewer(current);
+        if (current > 0 && current < MIGRATIONS.size() && backupDir != null) backup(current);
         for (int v = current + 1; v <= MIGRATIONS.size(); v++) {
             conn.setAutoCommit(false);
             try (Statement st = conn.createStatement()) {
@@ -158,6 +223,44 @@ public final class Database implements AutoCloseable {
             } finally {
                 conn.setAutoCommit(true);
             }
+        }
+    }
+
+    /**
+     * A consistent copy of the database (including un-checkpointed WAL pages) before migrating from
+     * {@code fromVersion}; a failed copy stops the upgrade rather than migrating without one.
+     */
+    private void backup(int fromVersion) throws SQLException {
+        try {
+            Files.createDirectories(backupDir);
+            String stamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
+                    .withZone(java.time.ZoneOffset.UTC).format(java.time.Instant.now());
+            Path target = backupDir.resolve("studio-v" + fromVersion + "-" + stamp + ".db");
+            for (int i = 1; Files.exists(target); i++) {
+                target = backupDir.resolve("studio-v" + fromVersion + "-" + stamp + "-" + i + ".db");
+            }
+            try (PreparedStatement ps = conn.prepareStatement("VACUUM INTO ?")) {
+                ps.setString(1, target.toAbsolutePath().toString());
+                ps.execute();
+            }
+            lastBackup = target;
+            pruneBackups();
+        } catch (java.io.IOException e) {
+            throw new SQLException("Cannot copy the database before upgrading it: " + e.getMessage(), e);
+        }
+    }
+
+    private void pruneBackups() throws java.io.IOException {
+        try (var files = Files.list(backupDir)) {
+            List<Path> all = files.filter(p -> p.getFileName().toString().matches("studio-v\\d+-.*\\.db"))
+                    .sorted(java.util.Comparator.comparing((Path p) -> {
+                        try {
+                            return Files.getLastModifiedTime(p);
+                        } catch (java.io.IOException e) {
+                            return java.nio.file.attribute.FileTime.fromMillis(0);
+                        }
+                    }).reversed()).toList();
+            for (int i = KEEP_BACKUPS; i < all.size(); i++) Files.deleteIfExists(all.get(i));
         }
     }
 
