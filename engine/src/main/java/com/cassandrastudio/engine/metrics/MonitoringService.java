@@ -147,6 +147,16 @@ public final class MonitoringService implements AutoCloseable {
 
     /** History of one metric; node null = all nodes; window defaults to the last 15 minutes. */
     public Series series(String connectionId, String metric, String node, Long fromMs, Long toMs) {
+        return series(connectionId, metric, node, fromMs, toMs, 0);
+    }
+
+    /**
+     * As {@link #series(String, String, String, Long, Long)}, with at most {@code maxPoints} points per
+     * node (0 = all), downsampled with largest-triangle-three-buckets so peaks stay visible. A 24 h
+     * chart of a 500-node cluster then moves a few hundred points per node, not 1,800 (NFR-SCALE).
+     */
+    public Series series(String connectionId, String metric, String node, Long fromMs, Long toMs, int maxPoints) {
+        if (maxPoints < 0 || (maxPoints > 0 && maxPoints < 3)) throw ApiException.badRequest("maxPoints must be 0 or at least 3");
         connections.get(connectionId);
         if (!SeriesMetrics.known(metric)) {
             throw new ApiException(400, "bad_request", "Unknown metric '" + metric + "'",
@@ -157,7 +167,13 @@ public final class MonitoringService implements AutoCloseable {
         if (from > to) throw ApiException.badRequest("fromMs must not be after toMs");
         Poller p = pollers.get(connectionId);
         String unit = SeriesMetrics.ALL.get(metric).unit();
-        return new Series(metric, unit, p == null ? Map.of() : p.history.query(metric, node, from, to));
+        Map<String, List<double[]>> points = p == null ? Map.of() : p.history.query(metric, node, from, to);
+        if (maxPoints > 0) {
+            Map<String, List<double[]>> sampled = new TreeMap<>();
+            points.forEach((n, pts) -> sampled.put(n, Downsample.lttb(pts, maxPoints)));
+            points = sampled;
+        }
+        return new Series(metric, unit, points);
     }
 
     // ---- thresholds (ALR-1) -----------------------------------------------------------

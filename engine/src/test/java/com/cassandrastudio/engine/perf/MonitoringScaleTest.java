@@ -78,6 +78,14 @@ class MonitoringScaleTest {
             Series s = h.monitoring.series(h.connectionId, "heap.used", null, h.now() - 24 * 3_600_000L, h.now());
             long queryMs = (System.nanoTime() - t0) / 1_000_000;
             int returned = s.pointsByNode().values().stream().mapToInt(List::size).sum();
+            t0 = System.nanoTime();
+            Series sampled = h.monitoring.series(h.connectionId, "heap.used", null, h.now() - 24 * 3_600_000L, h.now(), 400);
+            long sampledMs = (System.nanoTime() - t0) / 1_000_000;
+            int sampledPoints = sampled.pointsByNode().values().stream().mapToInt(List::size).sum();
+            String json = com.cassandrastudio.engine.util.Json.write(sampled);
+            System.out.printf("PERF 24 h series, maxPoints=400 per node: %d ms, %d points, %d KB JSON (full: %d KB)%n", sampledMs,
+                    sampledPoints, json.length() / 1024, com.cassandrastudio.engine.util.Json.write(s).length() / 1024);
+            assertThat(sampled.pointsByNode().values()).allSatisfy(p -> assertThat(p).hasSizeLessThanOrEqualTo(400));
             System.out.printf("PERF history 500 nodes x 24 h x %d metrics: %d points, ~%d MB; 24 h series query of one metric"
                             + " (all nodes) %d ms, %d points%n",
                     com.cassandrastudio.engine.metrics.SeriesMetrics.ALL.size(), points, bytes / (1024 * 1024), queryMs, returned);

@@ -8,6 +8,12 @@ const DARK = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", 
 
 export const PALETTE_SIZE = LIGHT.length;
 
+/** One colour per name (datacenters in large-cluster charts), in sorted order. */
+export function categoricalColors(names: Iterable<string>, dark: boolean): Map<string, string> {
+  const p = dark ? DARK : LIGHT;
+  return new Map([...new Set(names)].sort().map((n, i) => [n, p[i % p.length]]));
+}
+
 export interface NodeStyle { color: string; /** 0 for the first 8 nodes; past that lines are dotted. */ cycle: number }
 
 /**

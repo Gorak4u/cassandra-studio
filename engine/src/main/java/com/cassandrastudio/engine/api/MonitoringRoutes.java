@@ -33,8 +33,11 @@ public final class MonitoringRoutes {
         });
         app.get(BASE + "/status", ctx -> ctx.json(svc.status(id(ctx))));
         app.get(BASE + "/snapshot", ctx -> ctx.json(svc.snapshot(id(ctx))));
-        app.get(BASE + "/series", ctx -> ctx.json(svc.series(id(ctx), ctx.queryParam("metric"),
-                blankToNull(ctx.queryParam("node")), longParam(ctx, "fromMs"), longParam(ctx, "toMs"))));
+        app.get(BASE + "/series", ctx -> {
+            Long maxPoints = longParam(ctx, "maxPoints");
+            ctx.json(svc.series(id(ctx), ctx.queryParam("metric"), blankToNull(ctx.queryParam("node")),
+                    longParam(ctx, "fromMs"), longParam(ctx, "toMs"), maxPoints == null ? 0 : (int) Math.min(maxPoints, 100_000)));
+        });
         app.get(BASE + "/ring", ctx -> ctx.json(svc.ring(id(ctx), blankToNull(ctx.queryParam("keyspace")))));
         app.get(BASE + "/tables", ctx -> ctx.json(svc.tables(id(ctx), blankToNull(ctx.queryParam("keyspace")))));
         app.get(BASE + "/alerts", ctx -> ctx.json(svc.alerts(id(ctx))));
