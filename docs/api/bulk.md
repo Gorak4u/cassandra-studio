@@ -138,3 +138,8 @@ numbers vary run to run.
 
 The 4.1 load stays under the ~10k rows/s target on the busy host (load average ~25 during the
 first run); unload is above the ~20k rows/s target everywhere.
+
+Re-measured on 2026-10-10 on a quieter host by `perf/BulkThroughputIntegrationTest` (keyspace
+`t3h_perf`): the load was latency-bound by its old default of 16 requests in flight (7,964 rows/s
+at the default, 22,295 rows/s at 64), so the default `concurrency` is now 64: 15,198 – 20,722
+rows/s for load and 52,946 – 144,214 rows/s for unload on acme-core 4.1. See docs/perf.md.

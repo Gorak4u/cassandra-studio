@@ -10,7 +10,7 @@ Errors use the standard `{error, message, details}` body.
 | POST | `/api/clusters/{id}/monitoring/stop` | 204 | Also stopped on disconnect. |
 | GET | `/api/clusters/{id}/monitoring/status` | `AccessStatus` | Per-node reachability and route; drives the "JMX not reachable" banner. |
 | GET | `/api/clusters/{id}/monitoring/snapshot` | `ClusterSnapshot` | Latest poll. 409 `{error:"not_started"}` if monitoring is not started. |
-| GET | `/api/clusters/{id}/monitoring/series?metric=&node=&fromMs=&toMs=` | `Series` | `metric` from `SERIES_METRICS`. `node` optional (address; omit = all nodes). Default window: last 15 min. History is kept in memory per cluster for 24 h (MON-3), 1 point per poll, downsampled to 1/min after 1 h. |
+| GET | `/api/clusters/{id}/monitoring/series?metric=&node=&fromMs=&toMs=&maxPoints=` | `Series` | `metric` from `SERIES_METRICS`. `node` optional (address; omit = all nodes). Default window: last 15 min. History is kept in memory per cluster for 24 h (MON-3), 1 point per poll, downsampled to 1/min after 1 h. `maxPoints` (optional, ≥ 3) caps the points per node with largest-triangle-three-buckets downsampling (peaks kept); the charts ask for 30,000 / nodes (60…400). |
 | GET | `/api/clusters/{id}/monitoring/ring?keyspace=` | `Ring` | Tokens and ownership from StorageService; effective ownership needs a keyspace (defaults to the first non-system one). |
 | GET | `/api/clusters/{id}/monitoring/tables?keyspace=` | `TableMetrics[]` | MON-18. Omit keyspace = all non-system tables. Read on request, not every poll. |
 | GET | `/api/clusters/{id}/monitoring/alerts` | `Alert[]` | Active alerts (ALR-1). |
@@ -19,7 +19,7 @@ Errors use the standard `{error, message, details}` body.
 ## Behaviour details (as built)
 
 - `ring` and `tables` work without `start` (read on request). `tables` returns 503 `{error:"jmx_unavailable"}` when no node can be read.
-- `alerts` returns `[]` and `series` empty points before `start`; only `snapshot` returns 409. `snapshot` right after `start` waits for the first poll.
+- `alerts` returns `[]` and `series` empty points before `start`; only `snapshot` returns 409. `snapshot` right after `start` waits for the first poll, at most 25 s (then 503 `first_poll_pending`, e.g. a cluster that hangs on connect).
 - Series units: `bytes`, `pct`, `ms`, `us`, `per_sec`, `count`. `client.timeouts`, `client.unavailables`, `dropped.total` are per-second rates; `gc.pause_ms` is the mean pause since the previous poll on the worst collector.
 - `NodeSnapshot.state` is nodetool style `UN/DN/UJ/UL/UM`, or `?N` when neither the driver, the node's JMX nor any peer's gossip knows the state (only `node.unreachable` fires then).
 - Thresholds body: flat object of `number|null` with keys `heap.high.yellowPct`, `heap.high.redPct`, `gc.pressure.yellowPct`, `gc.pressure.redPct`, `compaction.backlog.pending`, `disk.usage.yellowPct`, `disk.usage.redPct`, `load.imbalance.factor`, `hints.backlog.polls`. GET returns effective values; PUT sends the full map, `null` clears an override. Stored in `settings` under `monitoring.thresholds/<id>`.
