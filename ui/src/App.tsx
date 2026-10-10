@@ -1,4 +1,4 @@
-import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./lib/api";
 import type { ConnectionConfig, EngineInfo, Folder } from "./lib/types";
 import { ConnectionTree } from "./components/ConnectionTree";
@@ -11,7 +11,8 @@ import { AppSettings } from "./panels/settings/AppSettings";
 import {
   autoConnectOnRestore, clampSidebar, debounced, EMPTY_UI_STATE, pruneUiState, SIDEBAR_MAX, SIDEBAR_MIN, studioApi, type UiState,
 } from "./lib/studioApi";
-import { StudioDataDialog, uiErrors } from "./components/StudioDataDialog";
+import { StudioDataDialog } from "./components/StudioDataDialog";
+import { reportUiError, ViewBoundary } from "./components/ViewBoundary";
 
 type Theme = "light" | "dark";
 
@@ -23,38 +24,6 @@ function initialTheme(): Theme {
     // storage unavailable
   }
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
-/** Errors in one view stay in that view; they are written to the local crash log (NFR-OBS). */
-class ViewBoundary extends Component<{ name: string; children: ReactNode }, { error: Error | null }> {
-  state: { error: Error | null } = { error: null };
-
-  static getDerivedStateFromError(error: Error) {
-    return { error };
-  }
-
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    reportUiError(`${this.props.name}: ${error.message}`, error.stack, info.componentStack ?? undefined);
-  }
-
-  render() {
-    if (!this.state.error) return this.props.children;
-    return (
-      <div className="pad" role="alert">
-        <div className="notice error">This view stopped because of an error: {this.state.error.message}. It was written to the local crash log.</div>
-        <button className="btn" onClick={() => this.setState({ error: null })}>Reload view</button>
-      </div>
-    );
-  }
-}
-
-let reported = 0;
-/** Sends a UI error to the engine's local crash log (at most 50 per window) and keeps it for "Copy diagnostics". */
-function reportUiError(message: string, stack?: string, componentStack?: string) {
-  uiErrors.push(message.slice(0, 500));
-  if (uiErrors.length > 20) uiErrors.shift();
-  if (reported++ >= 50) return;
-  studioApi.reportUiError({ message, stack, componentStack }).catch(() => undefined);
 }
 
 export function App() {

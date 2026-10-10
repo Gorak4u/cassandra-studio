@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { ClusterInfo, ConnectionConfig } from "../lib/types";
 import { errorText } from "../components/feedback";
+import { ViewBoundary } from "../components/ViewBoundary";
 import { OverviewPanel } from "./OverviewPanel";
 import { QueryPanel } from "./QueryPanel";
 import { SchemaPanel } from "./SchemaPanel";
@@ -101,21 +102,30 @@ export function Workspace(props: {
         ) : (
           <>
             <div style={{ display: tab === "overview" ? "block" : "none", height: "100%" }}>
-              <OverviewPanel conn={props.conn} info={info} onRefresh={() => api.clusterInfo(props.conn.id!).then(setInfo).catch(() => connect())} />
+              <ViewBoundary name={`${props.conn.name} · Overview`}>
+                <OverviewPanel conn={props.conn} info={info} onRefresh={() => api.clusterInfo(props.conn.id!).then(setInfo).catch(() => connect())} />
+              </ViewBoundary>
             </div>
             <div style={{ display: tab === "query" ? "block" : "none", height: "100%" }}>
-              <QueryPanel conn={props.conn} info={info} dark={props.dark} openText={openText} />
+              <ViewBoundary name={`${props.conn.name} · Query`}>
+                <QueryPanel conn={props.conn} info={info} dark={props.dark} openText={openText} />
+              </ViewBoundary>
             </div>
-            {tab === "monitoring" && <MonitoringPanel conn={props.conn} info={info} dark={props.dark} />}
-            {tab === "schema" && <SchemaPanel conn={props.conn} onOpenInEditor={openInEditor} />}
-            {tab === "roles" && <RolesPanel conn={props.conn} />}
-            {tab === "operations" && <OperationsPanel conn={props.conn} info={info} dark={props.dark} />}
-            {tab === "diagnostics" && <DiagnosticsPanel conn={props.conn} info={info} dark={props.dark} />}
-            {tab === "gclogs" && <GcLogPanel conn={props.conn} info={info} dark={props.dark} />}
-            {tab === "config" && <ConfigPanel conn={props.conn} info={info} dark={props.dark} />}
-            {tab === "backups" && <BackupPanel conn={props.conn} info={info} dark={props.dark} />}
-            {tab === "bulk" && <BulkPanel conn={props.conn} info={info} dark={props.dark} />}
-            {tab === "history" && <HistoryPanel conn={props.conn} onOpenInEditor={openInEditor} />}
+            {/* One failing tab shows its error in place; the tab bar and the other tabs keep working. */}
+            {tab !== "overview" && tab !== "query" && (
+              <ViewBoundary key={tab} name={`${props.conn.name} · ${tab}`}>
+                {tab === "monitoring" && <MonitoringPanel conn={props.conn} info={info} dark={props.dark} />}
+                {tab === "schema" && <SchemaPanel conn={props.conn} onOpenInEditor={openInEditor} />}
+                {tab === "roles" && <RolesPanel conn={props.conn} />}
+                {tab === "operations" && <OperationsPanel conn={props.conn} info={info} dark={props.dark} />}
+                {tab === "diagnostics" && <DiagnosticsPanel conn={props.conn} info={info} dark={props.dark} />}
+                {tab === "gclogs" && <GcLogPanel conn={props.conn} info={info} dark={props.dark} />}
+                {tab === "config" && <ConfigPanel conn={props.conn} info={info} dark={props.dark} />}
+                {tab === "backups" && <BackupPanel conn={props.conn} info={info} dark={props.dark} />}
+                {tab === "bulk" && <BulkPanel conn={props.conn} info={info} dark={props.dark} />}
+                {tab === "history" && <HistoryPanel conn={props.conn} onOpenInEditor={openInEditor} />}
+              </ViewBoundary>
+            )}
           </>
         )}
       </div>
