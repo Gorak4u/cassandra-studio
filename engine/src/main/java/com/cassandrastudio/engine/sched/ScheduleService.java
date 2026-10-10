@@ -98,8 +98,13 @@ public final class ScheduleService implements AutoCloseable {
                 s.windowEnd(), s.enabled(), s.params(), null, last, old.map(Schedule::lastOutcome).orElse(null),
                 old.map(Schedule::lastJobId).orElse(null));
         saved = saved.withRun(nextRun(saved, System.currentTimeMillis()), last, saved.lastOutcome(), saved.lastJobId());
-        db.update("INSERT OR REPLACE INTO schedules (id, connection_id, type, name, every_minutes, at_time, window_start, window_end,"
-                        + " enabled, params_json, next_run_ms, last_run_ms, last_outcome, last_job_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        db.update("INSERT INTO schedules (id, connection_id, type, name, every_minutes, at_time, window_start, window_end,"
+                        + " enabled, params_json, next_run_ms, last_run_ms, last_outcome, last_job_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                        + " ON CONFLICT(id) DO UPDATE SET connection_id = excluded.connection_id, type = excluded.type,"
+                        + " name = excluded.name, every_minutes = excluded.every_minutes, at_time = excluded.at_time,"
+                        + " window_start = excluded.window_start, window_end = excluded.window_end, enabled = excluded.enabled,"
+                        + " params_json = excluded.params_json, next_run_ms = excluded.next_run_ms, last_run_ms = excluded.last_run_ms,"
+                        + " last_outcome = excluded.last_outcome, last_job_id = excluded.last_job_id",
                 saved.id(), saved.connectionId(), saved.type(), saved.name(), saved.everyMinutes(), saved.atTime(),
                 saved.windowStart(), saved.windowEnd(), saved.enabled() ? 1 : 0, Json.write(saved.params()), saved.nextRunMs(),
                 saved.lastRunMs(), saved.lastOutcome(), saved.lastJobId());
@@ -134,6 +139,7 @@ public final class ScheduleService implements AutoCloseable {
         refreshFinished();
         for (Schedule s : list(null)) {
             if (!s.enabled() || s.nextRunMs() == null || s.nextRunMs() > nowMs) continue;
+            if (!claim(s, nowMs)) continue; // another Studio Server instance took this run (SRV-7)
             if (s.lastJobId() != null && isRunning(s.lastJobId())) {
                 record(s, nowMs, null, "SKIPPED", "previous run still running");
                 updateRun(s.withRun(nextRun(s, nowMs), s.lastRunMs(), "SKIPPED", s.lastJobId()));
@@ -164,6 +170,16 @@ public final class ScheduleService implements AutoCloseable {
             updateRun(s.withRun(nextRun(s, nowMs), nowMs, "FAILED", s.lastJobId()));
             throw e;
         }
+    }
+
+    /**
+     * Moves the schedule's next run on only if it is still the one this instance read: with several
+     * Studio Server instances on one store, a due run is taken by exactly one of them, even if two
+     * briefly both act as leader.
+     */
+    private boolean claim(Schedule s, long nowMs) {
+        return db.update("UPDATE schedules SET next_run_ms = ? WHERE id = ? AND next_run_ms = ?",
+                nextRun(s, nowMs), s.id(), s.nextRunMs()) == 1;
     }
 
     /** Copies the final state of finished jobs onto their schedule and run rows. */

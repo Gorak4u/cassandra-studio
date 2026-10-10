@@ -29,6 +29,8 @@ dependencies {
     // Ed25519 SSH keys (the usual modern key type): MINA SSHD needs this provider for them.
     implementation("net.i2p.crypto:eddsa:0.3.0")
     implementation("org.xerial:sqlite-jdbc:3.53.4.0")
+    // Studio Server's shared store for HA (SRV-7). BSD-2-Clause.
+    implementation("org.postgresql:postgresql:42.7.14") { exclude(group = "org.checkerframework") } // annotations only
     implementation("com.github.javakeyring:java-keyring:1.0.4")
     implementation("org.slf4j:slf4j-simple:2.0.20")
 

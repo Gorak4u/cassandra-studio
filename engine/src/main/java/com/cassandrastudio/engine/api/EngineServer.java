@@ -37,14 +37,28 @@ public final class EngineServer implements AutoCloseable {
     private final String token;
     private final Javalin app;
     private final String bindHost;
+    /** Studio Server (SRV-1); null in the desktop app. */
+    private final ServerMode serverMode;
 
     public record Options(String host, int port, String token, Path uiDir, boolean devCors) {}
 
     public EngineServer(Engine engine, Options options) {
+        this(engine, options, null);
+    }
+
+    /** With {@code serverMode}: Studio Server (named API tokens, per-user requests, TLS); null: the desktop engine. */
+    public EngineServer(Engine engine, Options options, ServerMode serverMode) {
         this.engine = engine;
         this.token = options.token();
         this.bindHost = options.host();
+        this.serverMode = serverMode;
         this.app = Javalin.create(cfg -> {
+            if (serverMode != null) {
+                serverMode.configure(cfg);
+                cfg.jetty.modifyServletContextHandler(h -> h.addFilter(
+                        new org.eclipse.jetty.ee10.servlet.FilterHolder(new ServerAuthFilter(serverMode)), "/*",
+                        java.util.EnumSet.of(jakarta.servlet.DispatcherType.REQUEST)));
+            }
             cfg.startup.showJavalinBanner = false;
             cfg.startup.showOldJavalinVersionWarning = false;
             cfg.jsonMapper(new JavalinJackson(Json.MAPPER, false));
@@ -78,6 +92,13 @@ public final class EngineServer implements AutoCloseable {
     private void security(RoutesConfig app) {
         app.before("/api/*", ctx -> {
             if (ctx.method().name().equals("OPTIONS")) return;
+            if (serverMode != null) {
+                // Studio Server: ServerAuthFilter checked the user's API token and runs the request as that user.
+                if (!serverMode.isPublic(ctx.path()) && ctx.attribute(ServerAuthFilter.USER) == null) {
+                    throw new ApiException(401, "unauthorized", "Missing, unknown or revoked API token");
+                }
+                return;
+            }
             if (isLoopback(bindHost)) {
                 // DNS-rebinding protection: a page on another site must not reach us via a name that resolves to 127.0.0.1.
                 String host = ctx.header("Host");
@@ -210,6 +231,8 @@ public final class EngineServer implements AutoCloseable {
         BulkRoutes.register(app, engine);
         NetworkRoutes.register(app, engine);
         StudioRoutes.register(app, engine);
+        AuditRoutes.register(app, engine);
+        if (serverMode != null) serverMode.routes(app);
 
         // cluster (CON-5)
         app.get("/api/clusters/{id}/info", ctx -> ctx.json(engine.clusters.info(ctx.pathParam("id"))));

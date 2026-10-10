@@ -21,10 +21,21 @@ public final class AuditLog {
 
     private final Database db;
     private final String actor;
+    private final java.util.List<java.util.function.BiConsumer<Entry, String>> listeners =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
 
     public AuditLog(Database db, String actor) {
         this.db = db;
         this.actor = actor;
+        AuditChain.initialise(db);
+    }
+
+    /**
+     * Called with every entry after it is written, with its chain hash ({@link AuditChain}); Studio Server
+     * uses this for the SIEM export (SRV-6). Listeners must not block.
+     */
+    public void addListener(java.util.function.BiConsumer<Entry, String> listener) {
+        listeners.add(listener);
     }
 
     /** The user on this thread ({@link Actor}), else the engine's own user. */
@@ -35,12 +46,17 @@ public final class AuditLog {
 
     public void record(ConnectionConfig conn, String node, String category, String action, String detail,
                        Outcome outcome, String error) {
-        db.update("""
-                INSERT INTO audit_log(at, actor, connection_id, connection_name, environment, node, category, action,
-                                      detail, outcome, error) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-                Instant.now().toString(), actor(), conn == null ? null : conn.id(), conn == null ? null : conn.name(),
+        AuditChain.Linked written = AuditChain.append(db, new Entry(0, Instant.now().toString(), actor(),
+                conn == null ? null : conn.id(), conn == null ? null : conn.name(),
                 conn == null ? null : conn.environment().name(), node, category, action, truncate(detail, 20_000),
-                outcome.name(), truncate(error, 4_000));
+                outcome.name(), truncate(error, 4_000)));
+        for (var l : listeners) {
+            try {
+                l.accept(written.entry(), written.hash());
+            } catch (RuntimeException e) {
+                // a broken exporter must never fail the audited action
+            }
+        }
     }
 
     /** Most rows one export returns. */
@@ -68,13 +84,15 @@ public final class AuditLog {
         sql.append(" ORDER BY id DESC LIMIT ?");
         params.add(limit);
         List<Entry> out = new ArrayList<>();
-        for (Map<String, Object> r : db.query(sql.toString(), params.toArray())) {
-            out.add(new Entry(((Number) r.get("id")).longValue(), (String) r.get("at"), (String) r.get("actor"),
-                    (String) r.get("connection_id"), (String) r.get("connection_name"), (String) r.get("environment"),
-                    (String) r.get("node"), (String) r.get("category"), (String) r.get("action"), (String) r.get("detail"),
-                    (String) r.get("outcome"), (String) r.get("error")));
-        }
+        for (Map<String, Object> r : db.query(sql.toString(), params.toArray())) out.add(fromRow(r));
         return out;
+    }
+
+    static Entry fromRow(Map<String, Object> r) {
+        return new Entry(((Number) r.get("id")).longValue(), (String) r.get("at"), (String) r.get("actor"),
+                (String) r.get("connection_id"), (String) r.get("connection_name"), (String) r.get("environment"),
+                (String) r.get("node"), (String) r.get("category"), (String) r.get("action"), (String) r.get("detail"),
+                (String) r.get("outcome"), (String) r.get("error"));
     }
 
     static final String[] CSV_COLUMNS = {"id", "at", "actor", "connection_id", "connection_name", "environment", "node",
