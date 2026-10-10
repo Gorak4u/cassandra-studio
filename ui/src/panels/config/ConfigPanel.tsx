@@ -125,7 +125,8 @@ function SettingsView(props: { snap: Snapshot }) {
         <button className="btn small" onClick={exportCsv} disabled={!shown.length}>Export CSV</button>
       </div>
       <Notices snap={snap} />
-      <div className="cfg-scroll">
+      {/* focusable so keyboard users can scroll a wide table */}
+      <div className="cfg-scroll" tabIndex={0} role="region" aria-label="Settings per node, scrollable">
         <table className="cfg-table" data-testid="config-settings-table" aria-label="Settings per node">
           <thead>
             <tr>
@@ -206,7 +207,7 @@ function DriftView(props: { id: string; snap: Snapshot; version: number }) {
       {hiera && report.hiera.enabled && report.hiera.error && <div className="notice warn" role="status">Hiera comparison unavailable: {report.hiera.error}</div>}
       {hiera && !report.hiera.enabled && <div className="notice info">Hiera comparison is off: set it up under Hiera comparison.</div>}
       <Notices snap={props.snap} />
-      <div className="cfg-scroll">
+      <div className="cfg-scroll" tabIndex={0} role="region" aria-label="Drift report, scrollable">
         <table className="cfg-table" data-testid="config-drift-table" aria-label="Drift report">
           <thead>
             <tr>
