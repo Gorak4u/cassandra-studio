@@ -7,6 +7,7 @@ import { useToast } from "./components/feedback";
 import { Workspace } from "./panels/Workspace";
 import { AuditPanel } from "./panels/HistoryPanel";
 import { download } from "./lib/export";
+import { AppSettings } from "./panels/settings/AppSettings";
 
 type Theme = "light" | "dark";
 
@@ -89,6 +90,7 @@ export function App() {
         <button className="btn small" onClick={() => api.exportConnections().then((d) => download("cassandra-studio-connections.json", JSON.stringify(d, null, 2), "application/json")).catch(toast.error)}>Export connections</button>
         <button className="btn small" onClick={() => importInput.current?.click()}>Import</button>
         <input ref={importInput} type="file" accept=".json" hidden onChange={(e) => e.target.files?.[0] && importFile(e.target.files[0])} />
+        <AppSettings />
         <button className="btn small" aria-label="Toggle dark mode" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
           {theme === "dark" ? "☀" : "☾"}
         </button>

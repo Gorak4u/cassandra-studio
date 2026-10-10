@@ -70,14 +70,7 @@
       ],
       "category": "public.app-category.developer-tools",
       "hardenedRuntime": true
-    },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "Gorak4u",
-        "repo": "cassandra-studio"
-      }
-    ]
+    }
   },
   "homepage": "https://github.com/Gorak4u/cassandra-studio",
   "repository": {

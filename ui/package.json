@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/copy-monaco.mjs && vite",
-    "build": "node scripts/copy-monaco.mjs && tsc -b && vite build",
+    "build": "node scripts/copy-monaco.mjs && tsc -b && vite build && node scripts/check-offline.mjs",
+    "check:offline": "node scripts/check-offline.mjs",
     "typecheck": "tsc -b --pretty",
     "test": "vitest run",
     "e2e": "playwright test"

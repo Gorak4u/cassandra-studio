@@ -382,6 +382,35 @@ export function ConnectionDialog(props: {
             <span>known_hosts path (blank = ~/.ssh/known_hosts)</span>
             <input value={c.ssh.knownHostsPath ?? ""} onChange={(e) => setSsh({ knownHostsPath: e.target.value || null })} />
           </label>
+          <label className="field">
+            <span>SSH through a proxy (jump host, else node)</span>
+            <select value={c.ssh.proxy?.type ?? ""}
+              onChange={(e) => setSsh({ proxy: e.target.value ? { ...(c.ssh.proxy ?? { host: "" }), type: e.target.value as "HTTP" | "SOCKS5" } : null })}>
+              <option value="">No proxy</option>
+              <option value="HTTP">HTTP CONNECT proxy</option>
+              <option value="SOCKS5">SOCKS5 proxy</option>
+            </select>
+          </label>
+          {c.ssh.proxy && (
+            <>
+              <label className="field">
+                <span>Proxy host and port</span>
+                <div className="row" style={{ flexWrap: "nowrap" }}>
+                  <input aria-label="Proxy host" style={{ flex: 1 }} value={c.ssh.proxy.host}
+                    onChange={(e) => setSsh({ proxy: { ...c.ssh.proxy!, host: e.target.value } })} placeholder="proxy.corp.example" />
+                  <input aria-label="Proxy port" type="number" style={{ width: 90 }} value={c.ssh.proxy.port ?? ""}
+                    placeholder={c.ssh.proxy.type === "SOCKS5" ? "1080" : "3128"}
+                    onChange={(e) => setSsh({ proxy: { ...c.ssh.proxy!, port: e.target.value ? Number(e.target.value) : null } })} />
+                </div>
+              </label>
+              <label className="field">
+                <span>Proxy user (optional)</span>
+                <input value={c.ssh.proxy.username ?? ""}
+                  onChange={(e) => setSsh({ proxy: { ...c.ssh.proxy!, username: e.target.value || null } })} />
+              </label>
+              {secretField("sshProxyPassword", "Proxy password")}
+            </>
+          )}
         </div>
       )}
     </Modal>

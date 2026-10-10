@@ -32,6 +32,15 @@ export interface Ssh {
   jumpUser?: string | null;
   strictHostKeyChecking: boolean;
   knownHostsPath?: string | null;
+  /** Optional: reach the first SSH hop through an HTTP CONNECT or SOCKS5 proxy (NFR-NET). */
+  proxy?: SshProxy | null;
+}
+
+export interface SshProxy {
+  type: "HTTP" | "SOCKS5";
+  host: string;
+  port?: number | null;
+  username?: string | null;
 }
 
 export interface ConnectionConfig {
@@ -62,7 +71,8 @@ export type SecretName =
   | "sshPassword"
   | "sshPassphrase"
   | "truststorePassword"
-  | "keystorePassword";
+  | "keystorePassword"
+  | "sshProxyPassword";
 
 export interface Folder {
   id: string;
