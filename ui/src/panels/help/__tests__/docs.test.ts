@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { headingIds, helpDocs, normalizePath, resolveLink } from "../docs";
-import type { Block, Inline } from "../markdown";
+import type { Block, Inline } from "../markdownParse";
 import { HELP_TOPICS } from "../topics";
 
 const docs = helpDocs();

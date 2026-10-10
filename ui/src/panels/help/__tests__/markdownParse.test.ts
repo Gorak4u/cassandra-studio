@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseInline, parseMarkdown, plainText, slugify, type Block } from "../markdown";
+import { parseInline, parseMarkdown, plainText, slugify, type Block } from "../markdownParse";
 
 /** Text of a paragraph block. */
 function para(b: Block): string {

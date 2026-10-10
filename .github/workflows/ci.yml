@@ -73,6 +73,11 @@ jobs:
       - name: Typecheck and build
         working-directory: ui
         run: npm run build
+      # Windows and macOS file systems ignore case: two paths differing only in case break the build there.
+      - name: No file names that differ only in case
+        run: |
+          dups="$(git ls-files | tr '[:upper:]' '[:lower:]' | sort | uniq -d)"
+          [ -z "$dups" ] || { echo "Paths that clash on case-insensitive file systems:"; echo "$dups"; exit 1; }
       - name: Audit production dependencies
         working-directory: ui
         run: npm audit --omit=dev --audit-level=high

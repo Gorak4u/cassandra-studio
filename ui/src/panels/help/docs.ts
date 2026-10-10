@@ -1,6 +1,6 @@
 // The guides bundled into the UI build (NFR-DOCS): docs/guide/**/*.md and docs/release-notes/*.md,
 // imported as raw text so the in-app help works fully offline.
-import { parseMarkdown, plainText, type Block } from "./markdown";
+import { parseMarkdown, plainText, type Block } from "./markdownParse";
 import type { LinkTarget } from "./Markdown";
 
 const RAW = import.meta.glob(["../../../../docs/guide/**/*.md", "../../../../docs/release-notes/*.md"], {

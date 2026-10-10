@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, describe, expect, it } from "vitest";
 import { HelpLink } from "../../../components/HelpLink";
 import { Markdown } from "../Markdown";
-import { parseMarkdown } from "../markdown";
+import { parseMarkdown } from "../markdownParse";
 
 afterEach(cleanup);
 

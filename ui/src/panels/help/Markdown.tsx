@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Block, Inline } from "./markdown";
+import type { Block, Inline } from "./markdownParse";
 
 /** Where a link goes, as decided by the caller (see docs.ts resolveLink). */
 export type LinkTarget =
