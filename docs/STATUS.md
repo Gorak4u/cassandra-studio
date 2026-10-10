@@ -9,7 +9,7 @@ Updated: 2026-10-10. Requirement IDs refer to [`requirement.txt`](../requirement
 | 0 Foundations | 🟢 done except signing | Builds, packaging, CI, security scans, release pipeline, test-env, ADRs, threat model; signing waits on certificates; job runner moves to Phase 3 |
 | 1 Connections, CQL, schema | 🟢 done | Remaining [S]/[C] items are scheduled in later phases |
 | 2 JMX monitoring | 🟢 done | Working end to end on live 3.11 / 4.1 / 5.0: node access (SSH tunnel, bastion jump, direct JMX, jmx_exporter with automatic fallback), health + 12 alert rules, nodes, disk usage over SSH, charts with 24 h history, ring per DC, table metrics, thresholds |
-| 3 Ops, GC logs, diagnostics, backup, bulk → v1.0 | 🟡 features and release hardening done; release candidate next | All [M] items of OPS-1…4, GCL-1…4, JVM-1/2, PRF-1/2, CFG-1/2, BAK-1…3, BLK-1/2 built and live-tested on 3.11 / 4.1 / 5.0; acceptance criteria 6, 8, 9, 10, 11 pass. Hardening done: user guide, install guide, 14 runbooks, release notes, in-app help; offline build, proxy and CA bundle, update check; 500-node scale, remembered layout, settings backup/restore, audit export, local crash log, hung-node fixes ([perf](perf.md)). Next: v1.0 release candidate, installer check on clean machines |
+| 3 Ops, GC logs, diagnostics, backup, bulk → v1.0 | 🟡 features and release hardening done; release candidate next | All [M] items of OPS-1…4, GCL-1…4, JVM-1/2, PRF-1/2, CFG-1/2, BAK-1…3, BLK-1/2 built and live-tested on 3.11 / 4.1 / 5.0; acceptance criteria 6, 8, 9, 10, 11 pass. Hardening done: user guide, install guide, 14 runbooks, release notes, in-app help; offline build, proxy and CA bundle, update check; 500-node scale, remembered layout, settings backup/restore, audit export, local crash log, hung-node fixes ([perf](perf.md)). Release candidate v1.0.0-rc.1 published. Next: owner checks on a real Windows PC and Mac, pilot cluster, signing, then v1.0.0 |
 | 4 Studio Server, repair, restore, alerts → v1.1 | ⚪ | |
 | 5–6 Deep diagnostics, provisioning, later items → v1.2 | ⚪ | |
 
@@ -49,7 +49,7 @@ Updated: 2026-10-10. Requirement IDs refer to [`requirement.txt`](../requirement
 | Scale ([perf](perf.md)) | 500 synthetic nodes polled every 10 s: ~200 ms per poll, ~3% of one core, 24 h history ~123 MB. 100 of 500 nodes hung: the other 400 still read, every UI request answers in 3–15 s. UI with 500 nodes and 100 connections: ring 0.5 s, charts 1.3–1.4 s, nodes sort 149 ms. Startup to usable UI with restored tabs 1.6 s |
 | Accessibility | axe-core WCAG 2.1 A/AA on every main screen: no violations (fails CI on serious/critical) |
 | Desktop window | Electron launched under a display: UI renders, startup to usable UI ~2 s (target 5 s), engine stops on close |
-| Installers | v0.1.0-alpha.2 published (https://github.com/Gorak4u/cassandra-studio/releases/tag/v0.1.0-alpha.2): Windows exe, macOS arm64 + x64 dmg, Linux AppImage/deb/rpm, each with .sha256; packaged-engine smoke passed on every OS in the release run; not yet opened on a real Windows PC or Mac |
+| Installers | v1.0.0-rc.1 published (https://github.com/Gorak4u/cassandra-studio/releases/tag/v1.0.0-rc.1): Windows exe, macOS arm64 + x64 dmg, Linux AppImage/deb/rpm, each with .sha256. Before publishing, the release installs and starts each Linux package on clean Ubuntu 22.04, Ubuntu 24.04 and Rocky Linux 9 (usable UI in 2–5 s, right version, clean uninstall) and smoke-tests the bundled engine on every OS. Not yet opened on a real Windows PC or Mac; not code-signed |
 
 ## Waiting on the owner
 
