@@ -52,7 +52,7 @@ public final class ServerMain {
     }
 
     /** Runs a command; returns the exit code, or -1 when the server was started and keeps running. */
-    static int run(String[] args, PrintStream out, PrintStream err, Map<String, String> env) {
+    public static int run(String[] args, PrintStream out, PrintStream err, Map<String, String> env) {
         List<String> pos = new ArrayList<>();
         Path config = null;
         String label = null;

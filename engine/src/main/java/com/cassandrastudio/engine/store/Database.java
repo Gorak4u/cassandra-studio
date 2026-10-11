@@ -492,7 +492,9 @@ public final class Database implements AutoCloseable {
 
     static boolean isConnectionLost(SQLException e) {
         for (Throwable t = e; t != null; t = t.getCause()) {
-            if (t instanceof SQLException s && s.getSQLState() != null && s.getSQLState().startsWith("08")) return true;
+            // 08: connection exception; 57P01..03: the server terminated the session (shutdown, failover, admin)
+            if (t instanceof SQLException s && s.getSQLState() != null
+                    && (s.getSQLState().startsWith("08") || s.getSQLState().startsWith("57P0"))) return true;
             if (t instanceof java.io.IOException) return true;
         }
         return false;
