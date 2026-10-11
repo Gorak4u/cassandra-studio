@@ -32,6 +32,11 @@ public final class Main {
     private Main() {}
 
     public static void main(String[] args) {
+        // Studio Server (docs/guide/server.md): "server ..." or "--server ..." runs the studio-server command.
+        if (args.length > 0 && (args[0].equals("server") || args[0].equals("--server"))) {
+            com.cassandrastudio.engine.server.ServerMain.main(java.util.Arrays.copyOfRange(args, 1, args.length));
+            return;
+        }
         Map<String, String> a = parse(args);
         String host = a.getOrDefault("host", "127.0.0.1");
         int port = Integer.parseInt(a.getOrDefault("port", "0"));

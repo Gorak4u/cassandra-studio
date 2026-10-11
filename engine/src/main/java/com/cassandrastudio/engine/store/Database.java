@@ -14,11 +14,17 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Studio's own SQLite database: connections, folders, history, audit.
+ * Studio's own database: connections, folders, history, audit. SQLite for the desktop app and a single
+ * Studio Server; PostgreSQL ({@code jdbc:postgresql://...}) for Studio Server with several instances
+ * (SRV-7). Migrations and statements are written once in plain SQL; {@link SqlDialect} adapts the
+ * SQLite-only bits (AUTOINCREMENT, 64-bit INTEGER, INSERT OR REPLACE/IGNORE, case-insensitive LIKE)
+ * for PostgreSQL.
  *
  * <p>Schema changes are numbered migrations applied in order and recorded in
  * {@code schema_version} (NFR-DATA). A database written by a newer Studio is
  * refused rather than silently misread, so a downgrade can never corrupt it.
+ * On SQLite a copy is taken before migrating; on PostgreSQL the operator's own
+ * backup (pg_dump, snapshots) covers upgrades (docs/guide/server.md).
  */
 public final class Database implements AutoCloseable {
 
@@ -112,6 +118,42 @@ public final class Database implements AutoCloseable {
               detail TEXT
             );
             CREATE INDEX schedule_runs_schedule ON schedule_runs(schedule_id, id);
+            """,
+            // 5: T1 Studio Server: tamper-evident audit chain (SRV-6), API tokens (SRV-1), leader lease and
+            //    instances (SRV-7), encrypted connection secrets shared by all instances (SRV-3)
+            """
+            CREATE TABLE audit_chain (
+              id INTEGER PRIMARY KEY,
+              prev_hash TEXT NOT NULL,
+              hash TEXT NOT NULL
+            );
+            CREATE TABLE server_tokens (
+              id TEXT PRIMARY KEY,
+              user_name TEXT NOT NULL,
+              label TEXT,
+              token_hash TEXT NOT NULL UNIQUE,
+              created_at TEXT NOT NULL,
+              last_used_at TEXT,
+              revoked_at TEXT
+            );
+            CREATE TABLE server_leader (
+              name TEXT PRIMARY KEY,
+              holder TEXT NOT NULL,
+              since_ms INTEGER NOT NULL,
+              expires_ms INTEGER NOT NULL
+            );
+            CREATE TABLE server_instances (
+              id TEXT PRIMARY KEY,
+              host TEXT,
+              version TEXT,
+              started_ms INTEGER NOT NULL,
+              heartbeat_ms INTEGER NOT NULL
+            );
+            CREATE TABLE server_secrets (
+              name TEXT PRIMARY KEY,
+              value TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
             """
     );
 
@@ -119,14 +161,28 @@ public final class Database implements AutoCloseable {
     static final int KEEP_BACKUPS = 5;
     public static final String FILE_NAME = "studio.db";
 
-    private final Connection conn;
-    /** Where pre-migration copies go; null for in-memory databases. */
+    /** Which SQL engine holds the store. */
+    public enum Dialect { SQLITE, POSTGRESQL }
+
+    /** Advisory lock held on PostgreSQL while one instance migrates, so two starting instances never both do. */
+    private static final long MIGRATION_LOCK = 0x5354_5544_494f_0001L;
+
+    private Connection conn;
+    /** Where pre-migration copies go; null for in-memory databases and PostgreSQL. */
     private final Path backupDir;
     private volatile Path lastBackup;
+    private final Dialect dialect;
+    private final String url;
+    private final java.util.Properties props;
+    private final SqlDialect sql;
 
-    private Database(Connection conn, Path backupDir) {
+    private Database(Connection conn, Path backupDir, Dialect dialect, String url, java.util.Properties props) {
         this.conn = conn;
         this.backupDir = backupDir;
+        this.dialect = dialect;
+        this.url = url;
+        this.props = props;
+        this.sql = new SqlDialect(dialect, this::primaryKey);
     }
 
     /**
@@ -150,6 +206,51 @@ public final class Database implements AutoCloseable {
         return open("jdbc:sqlite::memory:", null);
     }
 
+    /**
+     * Opens a store by JDBC URL (Studio Server): {@code jdbc:postgresql://host:5432/db} for a shared,
+     * highly available store, or {@code jdbc:sqlite:/path/studio.db} for a single server. User and password
+     * apply to PostgreSQL. A SQLite file gets the same downgrade refusal and pre-migration copy as the desktop.
+     */
+    public static Database connect(String jdbcUrl, String user, String password) {
+        if (jdbcUrl.startsWith("jdbc:sqlite:")) {
+            String path = jdbcUrl.substring("jdbc:sqlite:".length());
+            if (path.isBlank() || path.startsWith(":memory:")) return inMemory();
+            Path file = Path.of(path).toAbsolutePath();
+            Path dir = file.getParent();
+            try {
+                Files.createDirectories(dir);
+            } catch (java.io.IOException e) {
+                throw new IllegalStateException("Cannot create data directory " + dir, e);
+            }
+            if (Files.exists(file)) refuseIfNewer(probeVersion(file));
+            return open("jdbc:sqlite:" + file, dir.resolve("backups"));
+        }
+        if (!jdbcUrl.startsWith("jdbc:postgresql:")) {
+            throw new IllegalArgumentException("Store URL must start with jdbc:postgresql: or jdbc:sqlite:, got " + jdbcUrl);
+        }
+        java.util.Properties p = new java.util.Properties();
+        if (user != null && !user.isBlank()) p.setProperty("user", user);
+        if (password != null) p.setProperty("password", password);
+        // Strings bound to numeric columns are typed by the server, as SQLite does; TCP keepalive notices a dead peer.
+        p.setProperty("stringtype", "unspecified");
+        p.setProperty("tcpKeepAlive", "true");
+        p.setProperty("ApplicationName", "cassandra-studio");
+        p.setProperty("connectTimeout", "10");
+        try {
+            Connection c = DriverManager.getConnection(jdbcUrl, p);
+            Database db = new Database(c, null, Dialect.POSTGRESQL, jdbcUrl, p);
+            try {
+                db.migrate();
+            } catch (SQLException | RuntimeException e) {
+                db.close();
+                throw e;
+            }
+            return db;
+        } catch (SQLException e) {
+            throw new IllegalStateException("Cannot open Studio store " + jdbcUrl + ": " + e.getMessage(), e);
+        }
+    }
+
     private static Database open(String url, Path backupDir) {
         try {
             Connection c = DriverManager.getConnection(url);
@@ -158,7 +259,7 @@ public final class Database implements AutoCloseable {
                 st.execute("PRAGMA journal_mode = WAL");
                 st.execute("PRAGMA busy_timeout = 5000");
             }
-            Database db = new Database(c, backupDir);
+            Database db = new Database(c, backupDir, Dialect.SQLITE, url, null);
             try {
                 db.migrate();
             } catch (SQLException | RuntimeException e) {
@@ -227,6 +328,24 @@ public final class Database implements AutoCloseable {
         return MIGRATIONS.size();
     }
 
+    public Dialect dialect() {
+        return dialect;
+    }
+
+    /** Short description for status pages: "PostgreSQL (jdbc:postgresql://db:5432/studio)" or "SQLite". */
+    public String description() {
+        return dialect == Dialect.POSTGRESQL ? "PostgreSQL (" + url.replaceAll("[?;].*$", "") + ")" : "SQLite";
+    }
+
+    /**
+     * Inside {@link #transaction}: serialises this transaction with every other one taking the same lock,
+     * across all Studio Server instances (PostgreSQL advisory transaction lock). SQLite has one writer at a
+     * time already, so this is a no-op there.
+     */
+    public void lockInTransaction(long key) {
+        if (dialect == Dialect.POSTGRESQL) query("SELECT 1 AS locked FROM (SELECT pg_advisory_xact_lock(?)) l", key);
+    }
+
     public synchronized int schemaVersion() {
         try (Statement st = conn.createStatement()) {
             st.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)");
@@ -239,14 +358,31 @@ public final class Database implements AutoCloseable {
     }
 
     private synchronized void migrate() throws SQLException {
+        if (dialect == Dialect.POSTGRESQL) {
+            try (Statement st = conn.createStatement()) {
+                st.execute("SELECT pg_advisory_lock(" + MIGRATION_LOCK + ")");
+            }
+            try {
+                migrateLocked();
+            } finally {
+                try (Statement st = conn.createStatement()) {
+                    st.execute("SELECT pg_advisory_unlock(" + MIGRATION_LOCK + ")");
+                }
+            }
+        } else {
+            migrateLocked();
+        }
+    }
+
+    private void migrateLocked() throws SQLException {
         int current = schemaVersion();
         refuseIfNewer(current);
         if (current > 0 && current < MIGRATIONS.size() && backupDir != null) backup(current);
         for (int v = current + 1; v <= MIGRATIONS.size(); v++) {
             conn.setAutoCommit(false);
             try (Statement st = conn.createStatement()) {
-                for (String sql : MIGRATIONS.get(v - 1).split(";")) {
-                    if (!sql.isBlank()) st.execute(sql);
+                for (String stmt : MIGRATIONS.get(v - 1).split(";")) {
+                    if (!stmt.isBlank()) st.execute(sql.ddl(stmt));
                 }
                 st.execute("INSERT INTO schema_version(version) VALUES (" + v + ")");
                 conn.commit();
@@ -299,31 +435,107 @@ public final class Database implements AutoCloseable {
 
     /** Runs an INSERT/UPDATE/DELETE; returns rows affected. */
     public synchronized int update(String sql, Object... params) {
-        try (PreparedStatement ps = prepare(sql, params)) {
-            return ps.executeUpdate();
-        } catch (SQLException e) {
-            throw new IllegalStateException(e.getMessage(), e);
-        }
-    }
-
-    /** Runs a query; each row becomes a column-name to value map. */
-    public synchronized List<Map<String, Object>> query(String sql, Object... params) {
-        try (PreparedStatement ps = prepare(sql, params); ResultSet rs = ps.executeQuery()) {
-            List<Map<String, Object>> rows = new ArrayList<>();
-            int cols = rs.getMetaData().getColumnCount();
-            while (rs.next()) {
-                Map<String, Object> row = new LinkedHashMap<>();
-                for (int i = 1; i <= cols; i++) row.put(rs.getMetaData().getColumnLabel(i), rs.getObject(i));
-                rows.add(row);
+        return withRetry(() -> {
+            try (PreparedStatement ps = prepare(sql, params)) {
+                return ps.executeUpdate();
             }
-            return rows;
+        });
+    }
+
+    /** Runs a query (or an INSERT ... RETURNING); each row becomes a column-name to value map. */
+    public synchronized List<Map<String, Object>> query(String sql, Object... params) {
+        return withRetry(() -> {
+            try (PreparedStatement ps = prepare(sql, params); ResultSet rs = ps.executeQuery()) {
+                List<Map<String, Object>> rows = new ArrayList<>();
+                int cols = rs.getMetaData().getColumnCount();
+                while (rs.next()) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    for (int i = 1; i <= cols; i++) row.put(rs.getMetaData().getColumnLabel(i), rs.getObject(i));
+                    rows.add(row);
+                }
+                return rows;
+            }
+        });
+    }
+
+    private interface SqlWork<T> {
+        T run() throws SQLException;
+    }
+
+    /**
+     * PostgreSQL only: a connection lost outside a transaction (database restart or failover) is
+     * reopened once and the statement retried; inside a transaction the error is passed on.
+     */
+    private <T> T withRetry(SqlWork<T> work) {
+        try {
+            return work.run();
         } catch (SQLException e) {
+            if (dialect == Dialect.POSTGRESQL && isConnectionLost(e) && inAutoCommit()) {
+                try {
+                    reconnect();
+                    return work.run();
+                } catch (SQLException again) {
+                    throw new IllegalStateException(again.getMessage(), again);
+                }
+            }
             throw new IllegalStateException(e.getMessage(), e);
         }
     }
 
-    /** Runs {@code work} in one transaction. */
+    private boolean inAutoCommit() {
+        try {
+            return conn.isClosed() || conn.getAutoCommit();
+        } catch (SQLException e) {
+            return true;
+        }
+    }
+
+    static boolean isConnectionLost(SQLException e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            // 08: connection exception; 57P01..03: the server terminated the session (shutdown, failover, admin)
+            if (t instanceof SQLException s && s.getSQLState() != null
+                    && (s.getSQLState().startsWith("08") || s.getSQLState().startsWith("57P0"))) return true;
+            if (t instanceof java.io.IOException) return true;
+        }
+        return false;
+    }
+
+    private void reconnect() throws SQLException {
+        try {
+            conn.close();
+        } catch (SQLException ignored) {
+            // already broken
+        }
+        conn = DriverManager.getConnection(url, props);
+    }
+
+    /** True when a trivial statement succeeds (health checks). */
+    public synchronized boolean ping() {
+        try {
+            query("SELECT 1 AS ok");
+            return true;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    /** The primary-key columns of a table, for PostgreSQL's ON CONFLICT target. */
+    private List<String> primaryKey(String table) {
+        java.util.TreeMap<Integer, String> bySeq = new java.util.TreeMap<>();
+        try (ResultSet rs = conn.getMetaData().getPrimaryKeys(null, null, table.toLowerCase(java.util.Locale.ROOT))) {
+            while (rs.next()) bySeq.put(rs.getInt("KEY_SEQ"), rs.getString("COLUMN_NAME"));
+        } catch (SQLException e) {
+            throw new IllegalStateException("Cannot read the primary key of " + table + ": " + e.getMessage(), e);
+        }
+        return List.copyOf(bySeq.values());
+    }
+
+    /** Runs {@code work} in one transaction; a transaction already open on this thread is joined. */
     public synchronized void transaction(Runnable work) {
+        if (!inAutoCommit()) {
+            work.run();
+            return;
+        }
         try {
             conn.setAutoCommit(false);
             try {
@@ -340,8 +552,8 @@ public final class Database implements AutoCloseable {
         }
     }
 
-    private PreparedStatement prepare(String sql, Object... params) throws SQLException {
-        PreparedStatement ps = conn.prepareStatement(sql);
+    private PreparedStatement prepare(String statement, Object... params) throws SQLException {
+        PreparedStatement ps = conn.prepareStatement(sql.dml(statement));
         for (int i = 0; i < params.length; i++) ps.setObject(i + 1, params[i]);
         return ps;
     }

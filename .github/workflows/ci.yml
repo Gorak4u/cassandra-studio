@@ -120,12 +120,16 @@ jobs:
           (cd ui && npm ci --no-audit --no-fund && npm run build && npx playwright install --with-deps chromium)
       - name: Wait for every node to be up
         run: PROFILES="secure jmx" test-env/wait-ready.sh 300
+      - name: Start the Studio Server store (PostgreSQL, profile server)
+        run: |
+          docker compose -f test-env/docker-compose.yml --profile server up -d --wait studio-pg
       - name: Live integration tests (JMX access, operations, diagnostics, GC logs, config, backups, bulk)
         working-directory: engine
         run: >-
           ./gradlew --no-daemon test -Pintegration --tests '*JmxAccessIntegrationTest' --tests '*OpsIntegrationTest'
           --tests '*DiagIntegrationTest' --tests '*GcLogIntegrationTest' --tests '*ConfigIntegrationTest'
           --tests '*BackupIntegrationTest' --tests '*BulkIntegrationTest'
+          --tests '*ServerIntegrationTest'
       - name: Start engine
         run: |
           java -jar engine/build/libs/cassandra-studio-engine-all.jar --port 18080 --token e2e --data-dir "$RUNNER_TEMP/studio" \
@@ -200,3 +204,18 @@ jobs:
         run: |
           docker run --rm -v "$PWD":/src -v "$HOME/.cache/trivy":/root/.cache/trivy aquasec/trivy:0.58.1 \
             rootfs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 /src/engine/build/libs
+
+  server-image:
+    name: Studio Server image (build, TLS smoke test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21", cache: gradle }
+      - name: Build the engine distribution
+        working-directory: engine
+        run: ./gradlew --no-daemon -q installDist
+      - name: Build the image
+        run: docker build -f server/Dockerfile -t cassandra-studio-server:ci .
+      - name: Start with TLS, create a token, call /api/info
+        run: server/smoke-test.sh cassandra-studio-server:ci

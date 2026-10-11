@@ -1,0 +1,51 @@
+# Cassandra Studio Server settings (docs/guide/server.md).
+# Every key can also be set with an environment variable: STUDIO_ + the key in upper case with dots as
+# underscores, e.g. store.password -> STUDIO_STORE_PASSWORD. *File keys read the value from a file.
+
+# --- listener ---
+server.host = 0.0.0.0
+server.port = 8443
+# Required off loopback unless server.insecureHttp=true (only behind a TLS-terminating proxy).
+tls.keystore = /etc/cassandra-studio/server.p12
+tls.keystorePasswordFile = /etc/cassandra-studio/keystore.pass
+# tls.keystoreType = PKCS12
+# Origins allowed to call the API from a browser (comma separated); empty = same origin only.
+# server.corsOrigins = https://studio.example.com
+# Serve the web UI (built ui/dist) from here.
+# server.uiDir = /opt/cassandra-studio/ui
+
+# --- data ---
+server.dataDir = /var/lib/cassandra-studio
+# One server: SQLite in the data directory (default). Two or more (HA): PostgreSQL.
+# store.url = jdbc:postgresql://db.example.com:5432/studio?sslmode=verify-full
+# store.user = studio
+# store.passwordFile = /etc/cassandra-studio/db.pass
+
+# --- connection secrets ---
+# local: encrypted in the store with this key (create it with `studio-server secret-key`; the same file on
+# every instance; never in the database). Without it, one is created in server.dataDir on first start.
+secrets.provider = local
+# secrets.keyFile = /etc/cassandra-studio/secret.key
+# vault: HashiCorp Vault KV version 2, token authentication.
+# secrets.provider = vault
+# vault.address = https://vault.example.com:8200
+# vault.tokenFile = /etc/cassandra-studio/vault.token
+# vault.mount = secret
+# vault.path = cassandra-studio
+# vault.namespace =
+# vault.caFile = /etc/cassandra-studio/vault-ca.pem
+
+# --- audit export to a SIEM ---
+# audit.syslog.host = siem.example.com
+# audit.syslog.port = 514
+# audit.syslog.protocol = tcp
+# audit.syslog.framing = octet-counting
+# audit.syslog.facility = 13
+# audit.syslog.appName = cassandra-studio
+# audit.json.file = /var/log/cassandra-studio/audit.jsonl
+# audit.json.host = logstash.example.com
+# audit.json.port = 5170
+
+# --- high availability ---
+# server.instanceId = studio-1
+# ha.leaseSeconds = 20
