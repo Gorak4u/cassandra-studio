@@ -1,0 +1,40 @@
+# systemd unit for Cassandra Studio Server (docs/guide/server.md).
+# Install: unpack the engine distribution to /opt/cassandra-studio, create the user
+#   useradd --system --home-dir /var/lib/cassandra-studio --shell /usr/sbin/nologin studio
+# put settings in /etc/cassandra-studio/server.conf, copy this file to /etc/systemd/system/ and run
+#   systemctl daemon-reload && systemctl enable --now studio-server
+[Unit]
+Description=Cassandra Studio Server
+Documentation=file:///opt/cassandra-studio/docs/guide/server.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=studio
+Group=studio
+Environment=STUDIO_CONFIG=/etc/cassandra-studio/server.conf
+Environment="JAVA_OPTS=-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+ExecStart=/opt/cassandra-studio/bin/studio-server run
+# A clean stop gives up the scheduler lease, so another instance takes over at once.
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=5
+StateDirectory=cassandra-studio
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/cassandra-studio
+ReadOnlyPaths=/etc/cassandra-studio
+
+[Install]
+WantedBy=multi-user.target
