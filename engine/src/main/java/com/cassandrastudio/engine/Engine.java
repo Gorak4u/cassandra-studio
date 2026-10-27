@@ -110,6 +110,7 @@ public final class Engine implements AutoCloseable {
         jmx.closeConnection(connectionId);
         opsJmx.closeConnection(connectionId);
         shell.closeConnection(connectionId);
+        clusters.forget(connectionId);
         sessions.disconnect(connectionId);
     }
 
